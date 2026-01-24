@@ -27,7 +27,7 @@ from app.services.optimization.routing import (
     haversine_distance_km, 
     estimate_route_distance_and_time
 )
-from app.services.optimization.pooling import pool_rides, are_rides_poolable
+from app.services.optimization.pooling import pool_rides, are_rides_poolable, MAX_USERS_PER_CAR
 from app.services.optimization.solver import solve_cluster
 from app.services.pricing_engine import compute_pricing
 from app.services.optimization.optimizer import optimize_rides
@@ -47,11 +47,12 @@ def sample_rides():
     rides = []
     for ride_data in data:
         ride = RideRequest(
+            user_id=ride_data.get("user_id", "test_user"),
             pickup=Location(**ride_data["pickup"]),
             drop=Location(**ride_data["drop"]),
             preferred_time=datetime.fromisoformat(ride_data["preferred_time"]),
-            buffer_before_min=ride_data["buffer_before_min"],
-            buffer_after_min=ride_data["buffer_after_min"]
+            buffer_before_min=ride_data.get("buffer_before_min", 0),
+            buffer_after_min=ride_data.get("buffer_after_min", ride_data.get("buffer_time", 0))
         )
         rides.append(ride)
     return rides
@@ -211,6 +212,7 @@ class TestPooling:
     def test_pool_single_ride(self):
         """Single ride should form its own cluster."""
         ride = RideRequest(
+            user_id="user_1",
             pickup=Location(lat=28.6139, lng=77.2090),
             drop=Location(lat=28.5355, lng=77.3910),
             preferred_time=datetime(2026, 1, 24, 9, 0),
@@ -226,15 +228,38 @@ class TestPooling:
         """Nearby rides with overlapping windows should be pooled."""
         clusters = pool_rides(sample_rides)
         
-        # First 2 rides and ride 4 are nearby (within 2km)
-        # Ride 3 is far away
-        # So we expect at least 2 clusters
+        # Should have at least 1 cluster
         assert len(clusters) >= 1
         assert len(clusters) <= len(sample_rides)
+    
+    def test_max_4_users_per_cluster(self):
+        """Clusters should not exceed MAX_USERS_PER_CAR (4)."""
+        # Create 6 rides all at same location and time
+        rides = []
+        for i in range(6):
+            ride = RideRequest(
+                user_id=f"user_{i}",
+                pickup=Location(lat=28.6139, lng=77.2090),
+                drop=Location(lat=28.5355, lng=77.3910),
+                preferred_time=datetime(2026, 1, 24, 9, 0),
+                buffer_before_min=30,
+                buffer_after_min=30
+            )
+            rides.append(ride)
+        
+        clusters = pool_rides(rides)
+        
+        # All clusters should have at most 4 users
+        for cluster in clusters:
+            assert len(cluster) <= MAX_USERS_PER_CAR
+        
+        # Should have at least 2 clusters (6 rides / 4 max = 2 clusters)
+        assert len(clusters) >= 2
     
     def test_far_rides_not_pooled(self):
         """Rides with pickups > 2km apart should not be pooled."""
         ride1 = RideRequest(
+            user_id="user_1",
             pickup=Location(lat=28.6139, lng=77.2090),  # Delhi
             drop=Location(lat=28.5355, lng=77.3910),
             preferred_time=datetime(2026, 1, 24, 9, 0),
@@ -242,6 +267,7 @@ class TestPooling:
             buffer_after_min=30
         )
         ride2 = RideRequest(
+            user_id="user_2",
             pickup=Location(lat=19.0760, lng=72.8777),  # Mumbai (far!)
             drop=Location(lat=19.0330, lng=72.8296),
             preferred_time=datetime(2026, 1, 24, 9, 0),
@@ -314,15 +340,15 @@ class TestAPI:
     
     def test_optimize_endpoint_success(self, test_client, sample_rides):
         """POST /optimize should return valid output."""
-        # Convert sample rides to JSON-serializable format
+        # Convert sample rides to JSON-serializable format (using aliases)
         rides_data = []
         for ride in sample_rides:
             rides_data.append({
-                "pickup": {"lat": ride.pickup.lat, "lng": ride.pickup.lng},
-                "drop": {"lat": ride.drop.lat, "lng": ride.drop.lng},
-                "preferred_time": ride.preferred_time.isoformat(),
-                "buffer_before_min": ride.buffer_before_min,
-                "buffer_after_min": ride.buffer_after_min
+                "user_id": ride.user_id,
+                "location_start": {"lat": ride.pickup.lat, "lng": ride.pickup.lng},
+                "location_end": {"lat": ride.drop.lat, "lng": ride.drop.lng},
+                "ride_time": ride.preferred_time.isoformat(),
+                "buffer_time": ride.buffer_after_min
             })
         
         response = test_client.post(
@@ -352,11 +378,11 @@ class TestAPI:
             "/optimize",
             json={
                 "ride_requests": [{
-                    "pickup": {"lat": 28.6139, "lng": 77.2090},
-                    "drop": {"lat": 28.5355, "lng": 77.3910},
-                    "preferred_time": "2026-01-24T09:00:00",
-                    "buffer_before_min": 15,
-                    "buffer_after_min": 30
+                    "user_id": "test_user",
+                    "location_start": {"lat": 28.6139, "lng": 77.2090},
+                    "location_end": {"lat": 28.5355, "lng": 77.3910},
+                    "ride_time": "2026-01-24T09:00:00",
+                    "buffer_time": 30
                 }]
             }
         )
@@ -375,7 +401,7 @@ class TestIntegration:
     """End-to-end integration tests."""
     
     def test_full_optimization_flow(self, sample_rides):
-        """Test complete optimization flow."""
+        """Test complete optimization flow with D3 output format."""
         result = optimize_rides(sample_rides)
         
         # Check output structure
@@ -383,30 +409,34 @@ class TestIntegration:
         assert result.total_bundles_created >= 1
         assert len(result.bundles) >= 1
         
-        # Check each bundle has required fields (matches shared schema)
+        # Check each bundle matches D3 format
         for bundle in result.bundles:
-            assert len(bundle.ride_request_ids) >= 1
-            assert bundle.route_summary is not None
-            assert bundle.time_window is not None
-            assert bundle.metrics is not None
-            assert bundle.pricing is not None
+            # Required D3 fields
+            assert bundle.bundle_id is not None
+            assert bundle.route is not None
+            assert len(bundle.users) >= 1
+            assert bundle.distance >= 0
+            assert bundle.duration >= 0
+            assert bundle.cost_without_optimization >= 0
+            assert bundle.optimized_cost >= 0
             
-            # Check route summary
-            assert bundle.route_summary.total_distance_km >= 0
-            assert bundle.route_summary.estimated_duration_min >= 0
+            # Check per-user info
+            for user_info in bundle.users:
+                assert user_info.user_id is not None
+                assert user_info.pickup_location is not None
+                assert user_info.pickup_time is not None
+                assert user_info.drop_location is not None
+                assert user_info.drop_time is not None
             
-            # Check time window
-            assert bundle.time_window.start is not None
-            assert bundle.time_window.end is not None
-            
-            # Check metrics
-            assert bundle.metrics.flex_score >= 0
-            assert 0 <= bundle.metrics.pooling_efficiency <= 1
-            
-            # Check pricing is valid
-            assert bundle.pricing.baseline_driver_profit >= 0
-            assert bundle.pricing.optimized_driver_profit >= 0
-            assert bundle.pricing.broker_commission >= 0
+            # Optimized cost should be <= cost without optimization (or close)
+            # In some edge cases could be equal
+    
+    def test_max_4_users_in_bundles(self, sample_rides):
+        """Bundles should never exceed 4 users."""
+        result = optimize_rides(sample_rides)
+        
+        for bundle in result.bundles:
+            assert len(bundle.users) <= 4
     
     def test_deterministic_output(self, sample_rides):
         """Same input should produce same output."""

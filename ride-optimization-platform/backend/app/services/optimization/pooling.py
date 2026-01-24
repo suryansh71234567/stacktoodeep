@@ -12,6 +12,9 @@ from app.services.optimization.routing import haversine_distance_km
 # Maximum pickup distance for rides to be pool-compatible (km)
 MAX_PICKUP_DISTANCE_KM = 2.0
 
+# Maximum users per car (vehicle capacity constraint)
+MAX_USERS_PER_CAR = 4
+
 
 def are_rides_poolable(ride1: RideRequest, ride2: RideRequest) -> bool:
     """
@@ -56,19 +59,22 @@ def pool_rides(ride_requests: List[RideRequest]) -> List[List[RideRequest]]:
     """
     Group ride requests into poolable clusters using greedy algorithm.
     
+    Constraints:
+    - Maximum 4 users per car
+    - Rides must be within 2km pickup distance
+    - Time windows must overlap
+    
     Algorithm:
     1. Start with first unassigned ride as cluster seed
-    2. Find all rides poolable with the seed
+    2. Find all rides poolable with the seed (up to MAX_USERS_PER_CAR)
     3. Add them to the cluster
     4. Repeat until all rides are assigned
-    
-    Note: Uses greedy clustering, not optimal graph partitioning.
     
     Args:
         ride_requests: List of ride requests to pool
         
     Returns:
-        List of clusters, where each cluster is a list of poolable rides
+        List of clusters, where each cluster is a list of poolable rides (max 4)
     """
     if not ride_requests:
         return []
@@ -85,10 +91,14 @@ def pool_rides(ride_requests: List[RideRequest]) -> List[List[RideRequest]]:
         cluster = [seed_ride]
         assigned.add(i)
         
-        # Find all rides compatible with the seed
+        # Find all rides compatible with the seed (up to MAX_USERS_PER_CAR)
         for j, candidate_ride in enumerate(ride_requests):
             if j in assigned:
                 continue
+            
+            # Check capacity constraint
+            if len(cluster) >= MAX_USERS_PER_CAR:
+                break
                 
             # Check if candidate is poolable with seed
             if are_rides_poolable(seed_ride, candidate_ride):

@@ -1,5 +1,6 @@
 [
     {
+        "user_id": "user_001",
         "pickup": {
             "lat": 28.6139,
             "lng": 77.2090
@@ -13,6 +14,7 @@
         "buffer_after_min": 30
     },
     {
+        "user_id": "user_002",
         "pickup": {
             "lat": 28.6150,
             "lng": 77.2100
@@ -26,6 +28,7 @@
         "buffer_after_min": 20
     },
     {
+        "user_id": "user_003",
         "pickup": {
             "lat": 28.7041,
             "lng": 77.1025
@@ -39,6 +42,7 @@
         "buffer_after_min": 40
     },
     {
+        "user_id": "user_004",
         "pickup": {
             "lat": 28.6200,
             "lng": 77.2150
