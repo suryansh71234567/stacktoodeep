@@ -12,7 +12,12 @@ from app.models.ride import (
 )
 from app.models.route import VehicleRoute, Stop, StopType
 from app.models.pricing import PricingBreakdown
-from app.models.optimization import OptimizationInput, OptimizationOutput, RideBundle
+from app.models.optimization import (
+    OptimizationInput,
+    OptimizationOutput,
+    OptimizationMetrics,
+    RideBundle,
+)
 
 __all__ = [
     # Ride models
@@ -32,5 +37,6 @@ __all__ = [
     # Optimization models
     "OptimizationInput",
     "OptimizationOutput",
+    "OptimizationMetrics",
     "RideBundle",
 ]
