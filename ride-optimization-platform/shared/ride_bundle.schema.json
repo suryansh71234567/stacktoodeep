@@ -1,0 +1,93 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "RideBundle",
+    "type": "object",
+    "required": [
+        "bundle_id",
+        "ride_request_ids",
+        "route_summary",
+        "time_window",
+        "metrics",
+        "pricing"
+    ],
+    "properties": {
+        "bundle_id": {
+            "type": "string"
+        },
+        "ride_request_ids": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "route_summary": {
+            "type": "object",
+            "required": [
+                "total_distance_km",
+                "estimated_duration_min"
+            ],
+            "properties": {
+                "total_distance_km": {
+                    "type": "number"
+                },
+                "estimated_duration_min": {
+                    "type": "number"
+                }
+            }
+        },
+        "time_window": {
+            "type": "object",
+            "required": [
+                "start",
+                "end"
+            ],
+            "properties": {
+                "start": {
+                    "type": "string"
+                },
+                "end": {
+                    "type": "string"
+                }
+            }
+        },
+        "metrics": {
+            "type": "object",
+            "required": [
+                "flex_score",
+                "pooling_efficiency"
+            ],
+            "properties": {
+                "flex_score": {
+                    "type": "number"
+                },
+                "pooling_efficiency": {
+                    "type": "number",
+                    "description": "0–1 score"
+                }
+            }
+        },
+        "pricing": {
+            "type": "object",
+            "required": [
+                "baseline_driver_profit",
+                "optimized_driver_profit",
+                "total_user_savings",
+                "broker_commission"
+            ],
+            "properties": {
+                "baseline_driver_profit": {
+                    "type": "number"
+                },
+                "optimized_driver_profit": {
+                    "type": "number"
+                },
+                "total_user_savings": {
+                    "type": "number"
+                },
+                "broker_commission": {
+                    "type": "number"
+                }
+            }
+        }
+    }
+}

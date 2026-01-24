@@ -37,22 +37,45 @@ class OptimizationInput(BaseModel):
         }
 
 
+class RouteSummary(BaseModel):
+    """Route summary for the bundle (matches shared schema)."""
+    total_distance_km: float = Field(..., ge=0, description="Total route distance in km")
+    estimated_duration_min: float = Field(..., ge=0, description="Estimated duration in minutes")
+
+
+class TimeWindow(BaseModel):
+    """Time window for the bundle (matches shared schema)."""
+    start: datetime = Field(..., description="Earliest departure time")
+    end: datetime = Field(..., description="Latest departure time")
+
+
+class BundleMetrics(BaseModel):
+    """Optimization metrics for the bundle (matches shared schema)."""
+    flex_score: float = Field(..., ge=0, description="Combined flexibility score for all rides")
+    pooling_efficiency: float = Field(..., ge=0, le=1, description="Pooling efficiency 0-1")
+
+
 class RideBundle(BaseModel):
     """
     An optimized bundle of pooled rides.
     
     This is the primary output consumed by AI agents for bidding
     and blockchain contracts for auction/escrow.
+    
+    Matches shared/ride_bundle.schema.json
     """
-    bundle_id: UUID = Field(default_factory=uuid4, description="Unique bundle ID")
-    ride_request_ids: List[UUID] = Field(
+    bundle_id: str = Field(default_factory=lambda: str(uuid4()), description="Unique bundle ID")
+    ride_request_ids: List[str] = Field(
         ..., 
         description="IDs of ride requests in this bundle"
     )
-    route: VehicleRoute = Field(..., description="Optimized route for this bundle")
+    route_summary: RouteSummary = Field(..., description="Route distance and duration")
+    time_window: TimeWindow = Field(..., description="Acceptable time window")
+    metrics: BundleMetrics = Field(..., description="Optimization metrics")
     pricing: PricingBreakdown = Field(..., description="Economic breakdown")
-    time_window_start: datetime = Field(..., description="Earliest departure time")
-    time_window_end: datetime = Field(..., description="Latest departure time")
+    
+    # Internal fields (not in shared schema)
+    route: Optional[VehicleRoute] = Field(default=None, description="Detailed route with stops")
     created_at: datetime = Field(
         default_factory=datetime.utcnow, 
         description="Bundle creation timestamp"

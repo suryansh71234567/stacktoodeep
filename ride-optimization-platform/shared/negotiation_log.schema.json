@@ -1,0 +1,36 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "NegotiationLog",
+    "type": "object",
+    "required": [
+        "bundle_id",
+        "events"
+    ],
+    "properties": {
+        "bundle_id": {
+            "type": "string"
+        },
+        "events": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [
+                    "timestamp",
+                    "actor",
+                    "message"
+                ],
+                "properties": {
+                    "timestamp": {
+                        "type": "string"
+                    },
+                    "actor": {
+                        "type": "string"
+                    },
+                    "message": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    }
+}

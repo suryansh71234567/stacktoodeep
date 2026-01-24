@@ -383,16 +383,25 @@ class TestIntegration:
         assert result.total_bundles_created >= 1
         assert len(result.bundles) >= 1
         
-        # Check each bundle has required fields
+        # Check each bundle has required fields (matches shared schema)
         for bundle in result.bundles:
             assert len(bundle.ride_request_ids) >= 1
-            assert bundle.route is not None
+            assert bundle.route_summary is not None
+            assert bundle.time_window is not None
+            assert bundle.metrics is not None
             assert bundle.pricing is not None
-            assert bundle.time_window_start is not None
-            assert bundle.time_window_end is not None
             
-            # Check route has stops
-            assert len(bundle.route.stops) >= 2  # At least pickup and drop
+            # Check route summary
+            assert bundle.route_summary.total_distance_km >= 0
+            assert bundle.route_summary.estimated_duration_min >= 0
+            
+            # Check time window
+            assert bundle.time_window.start is not None
+            assert bundle.time_window.end is not None
+            
+            # Check metrics
+            assert bundle.metrics.flex_score >= 0
+            assert 0 <= bundle.metrics.pooling_efficiency <= 1
             
             # Check pricing is valid
             assert bundle.pricing.baseline_driver_profit >= 0

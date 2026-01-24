@@ -1,0 +1,36 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Settlement",
+    "type": "object",
+    "required": [
+        "bundle_id",
+        "winner_id",
+        "tx_hash",
+        "payouts"
+    ],
+    "properties": {
+        "bundle_id": {
+            "type": "string"
+        },
+        "winner_id": {
+            "type": "string"
+        },
+        "tx_hash": {
+            "type": "string"
+        },
+        "payouts": {
+            "type": "object",
+            "properties": {
+                "driver": {
+                    "type": "number"
+                },
+                "broker": {
+                    "type": "number"
+                },
+                "users": {
+                    "type": "number"
+                }
+            }
+        }
+    }
+}

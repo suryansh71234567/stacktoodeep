@@ -5,7 +5,14 @@ from typing import List
 from datetime import datetime
 
 from app.models.ride import RideRequest
-from app.models.optimization import OptimizationInput, OptimizationOutput, RideBundle
+from app.models.optimization import (
+    OptimizationInput, 
+    OptimizationOutput, 
+    RideBundle,
+    RouteSummary,
+    TimeWindow,
+    BundleMetrics
+)
 from app.models.pricing import PricingBreakdown
 from app.services.optimization.pooling import pool_rides, compute_cluster_time_window
 from app.services.optimization.solver import solve_cluster
@@ -49,7 +56,6 @@ def optimize_rides(ride_requests: List[RideRequest]) -> OptimizationOutput:
     
     # Step 3: Process each cluster
     bundles = []
-    total_distance_saved = 0.0
     total_user_savings = 0.0
     
     for cluster in clusters:
@@ -59,13 +65,15 @@ def optimize_rides(ride_requests: List[RideRequest]) -> OptimizationOutput:
         # Compute cluster time window
         time_window = compute_cluster_time_window(cluster)
         
-        # Compute user savings for this cluster
+        # Compute flex score and user savings for this cluster
+        cluster_flex_score = 0.0
         cluster_savings = 0.0
         for ride in cluster:
             flex_score = compute_flex_score(
                 ride.buffer_before_min,
                 ride.buffer_after_min
             )
+            cluster_flex_score += flex_score
             cluster_savings += compute_user_savings(flex_score)
         
         total_user_savings += cluster_savings
@@ -83,13 +91,23 @@ def optimize_rides(ride_requests: List[RideRequest]) -> OptimizationOutput:
             total_user_savings=cluster_savings
         )
         
-        # Create bundle
+        # Create bundle (matching shared schema)
         bundle = RideBundle(
-            ride_request_ids=[ride.id for ride in cluster],
-            route=route,
+            ride_request_ids=[str(ride.id) for ride in cluster],
+            route_summary=RouteSummary(
+                total_distance_km=route.total_distance_km,
+                estimated_duration_min=route.total_duration_min
+            ),
+            time_window=TimeWindow(
+                start=time_window[0] if time_window else datetime.utcnow(),
+                end=time_window[1] if time_window else datetime.utcnow()
+            ),
+            metrics=BundleMetrics(
+                flex_score=cluster_flex_score,
+                pooling_efficiency=pooling_efficiency
+            ),
             pricing=pricing,
-            time_window_start=time_window[0] if time_window else datetime.utcnow(),
-            time_window_end=time_window[1] if time_window else datetime.utcnow()
+            route=route  # Keep detailed route for internal use
         )
         bundles.append(bundle)
     
