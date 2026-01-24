@@ -1,0 +1,19 @@
+# Ignore Node Modules (Frontend & Blockchain)
+node_modules/
+dist/
+build/
+.next/
+
+# Ignore Python Environment (Backend)
+__pycache__/
+*.pyc
+venv/
+.env
+
+# Ignore Hardhat Cache (Blockchain)
+artifacts/
+cache/
+typechain-types/
+
+# System Files
+.DS_Store
