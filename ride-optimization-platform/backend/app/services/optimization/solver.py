@@ -129,11 +129,16 @@ class RouteSolver:
             # Plus a depot at index 0
             num_stops = len(rides) * 2 + 1  # +1 for depot
             
+            # Determine reference time (earliest time in batch)
+            min_time = min(r.time_window.earliest for r in rides)
+            # Round down to hour for clean logs
+            reference_dt = min_time.replace(minute=0, second=0, microsecond=0)
+            
             # Build distance matrix (in minutes)
             distance_matrix = await self._build_distance_matrix(rides)
             
             # Build time windows
-            time_windows = self._build_time_windows(rides)
+            time_windows = self._build_time_windows(rides, reference_dt)
             
             # Build demands (passengers at each stop)
             demands = self._build_demands(rides)
@@ -285,7 +290,8 @@ class RouteSolver:
     
     def _build_time_windows(
         self,
-        rides: List[RideRequest]
+        rides: List[RideRequest],
+        reference_dt: datetime
     ) -> List[Tuple[int, int]]:
         """
         Extract time windows for each stop.
@@ -294,6 +300,7 @@ class RouteSolver:
         
         Args:
             rides: List of ride requests
+            reference_dt: Reference time for normalization
             
         Returns:
             List of (earliest_minutes, latest_minutes) tuples
@@ -306,8 +313,8 @@ class RouteSolver:
         # Each ride has pickup and dropoff windows
         for ride in rides:
             # Pickup time window
-            earliest = self._datetime_to_minutes(ride.time_window.earliest)
-            latest = self._datetime_to_minutes(ride.time_window.latest)
+            earliest = self._datetime_to_minutes(ride.time_window.earliest, reference_dt)
+            latest = self._datetime_to_minutes(ride.time_window.latest, reference_dt)
             windows.append((earliest, latest))
             
             # Dropoff window (allow 2 hours after pickup window ends)
@@ -421,12 +428,13 @@ class RouteSolver:
         logger.info(f"Extracted {len(routes)} non-empty routes")
         return routes
     
-    def _datetime_to_minutes(self, dt: datetime) -> int:
+    def _datetime_to_minutes(self, dt: datetime, reference_dt: datetime) -> int:
         """Convert datetime to minutes since reference time."""
-        delta = dt - REFERENCE_TIME
+        delta = dt - reference_dt
         return int(delta.total_seconds() / 60)
     
     def _solve_greedy(self, rides: List[RideRequest]) -> List[VehicleRoute]:
+
         """
         Fallback greedy solver when OR-Tools is not available.
         

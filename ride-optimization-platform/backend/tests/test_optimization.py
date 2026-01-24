@@ -1,36 +1,20 @@
 """
-Comprehensive tests for the ride optimization platform.
+Comprehensive tests for the optimization engine.
 """
-import json
 import pytest
+import asyncio
+import uuid
 from datetime import datetime, timedelta
-from pathlib import Path
+from unittest.mock import Mock, patch, AsyncMock
+from typing import List
 
-from fastapi.testclient import TestClient
-
-# Test imports
-from app.main import app
-from app.models.ride import RideRequest, Location
-from app.models.route import Stop, StopType
-from app.utils.time_windows import (
-    compute_time_window, 
-    time_windows_overlap,
-    compute_overlap_window
-)
-from app.services.discount_calculator import (
-    compute_flex_score, 
-    compute_user_savings,
-    BASE_RIDE_COST,
-    MAX_DISCOUNT_RATIO
-)
-from app.services.optimization.routing import (
-    haversine_distance_km, 
-    estimate_route_distance_and_time
-)
-from app.services.optimization.pooling import pool_rides, are_rides_poolable
-from app.services.optimization.solver import solve_cluster
-from app.services.pricing_engine import compute_pricing
-from app.services.optimization.optimizer import optimize_rides
+from app.models.ride import RideRequest, Location, TimeWindow, RideStatus
+from app.models.route import VehicleRoute, Stop
+from app.services.optimization.optimizer import OptimizationService
+from app.services.optimization.pooling import RidePooler
+from app.services.optimization.solver import RouteSolver
+from app.services.pricing_engine import PricingEngine
+from app.utils.routing import RoutingService
 
 
 # ============================================================================
@@ -38,371 +22,296 @@ from app.services.optimization.optimizer import optimize_rides
 # ============================================================================
 
 @pytest.fixture
-def sample_rides():
-    """Load sample ride data from fixtures."""
-    fixtures_path = Path(__file__).parent / "fixtures" / "sample_rides.json"
-    with open(fixtures_path) as f:
-        data = json.load(f)
-    
-    rides = []
-    for ride_data in data:
-        ride = RideRequest(
-            pickup=Location(**ride_data["pickup"]),
-            drop=Location(**ride_data["drop"]),
-            preferred_time=datetime.fromisoformat(ride_data["preferred_time"]),
-            buffer_before_min=ride_data["buffer_before_min"],
-            buffer_after_min=ride_data["buffer_after_min"]
-        )
-        rides.append(ride)
-    return rides
-
+def mock_db_session():
+    """Mock database session."""
+    return Mock()
 
 @pytest.fixture
-def test_client():
-    """Create test client for API testing."""
-    return TestClient(app)
+def mock_routing_service():
+    """Mock RoutingService to avoid external API calls."""
+    service = Mock(spec=RoutingService)
+    
+    # Setup default return values
+    service.get_distance.return_value = 5.0 # 5 km
+    service.get_duration.return_value = 10.0 # 10 mins
+    
+    # Mock distance matrix
+    async def mock_matrix(sources, destinations):
+        # Return a matrix of 10s
+        return [[10.0 for _ in destinations] for _ in sources]
+    
+    service.get_distance_matrix = AsyncMock(side_effect=mock_matrix)
+    return service
+
+@pytest.fixture
+def sample_rides():
+    """Create sample rides for testing."""
+    now = datetime.now()
+    
+    # Ride 1: Delhi Center
+    ride1 = RideRequest(
+        id=uuid.uuid4(),
+        user_id="user1",
+        pickup=Location(latitude=28.6139, longitude=77.2090, address="Connaught Place"),
+        dropoff=Location(latitude=28.5355, longitude=77.3910, address="Noida Sector 18"),
+        time_window=TimeWindow(earliest=now, latest=now + timedelta(minutes=30), preferred=now + timedelta(minutes=15)),
+        num_passengers=1,
+        status=RideStatus.REQUESTED,
+        created_at=now
+    )
+    
+    # Ride 2: Nearby Pickup, overlap time
+    ride2 = RideRequest(
+        id=uuid.uuid4(),
+        user_id="user2",
+        pickup=Location(latitude=28.6129, longitude=77.2080, address="Near CP"),
+        dropoff=Location(latitude=28.5360, longitude=77.3920, address="Noida Sector 16"),
+        time_window=TimeWindow(earliest=now + timedelta(minutes=5), latest=now + timedelta(minutes=35), preferred=now + timedelta(minutes=20)),
+        num_passengers=1,
+        status=RideStatus.REQUESTED,
+        created_at=now
+    )
+    
+    # Ride 3: Far away (Mumbai)
+    ride3 = RideRequest(
+        id=uuid.uuid4(),
+        user_id="user3",
+        pickup=Location(latitude=19.0760, longitude=72.8777, address="Mumbai"),
+        dropoff=Location(latitude=19.0330, longitude=72.8296, address="Bandra"),
+        time_window=TimeWindow(earliest=now, latest=now + timedelta(minutes=30), preferred=now + timedelta(minutes=15)),
+        num_passengers=1,
+        status=RideStatus.REQUESTED,
+        created_at=now
+    )
+    
+    return [ride1, ride2, ride3]
+
+@pytest.fixture
+def optimization_service(mock_db_session, mock_routing_service):
+    """Create OptimizationService with mocks."""
+    pooler = RidePooler(routing_service=mock_routing_service)
+    # Using real solver but with mocked routing is safer for unit tests
+    # But RouteSolver uses OR-Tools, which we might want to test logic of
+    solver = RouteSolver(routing_service=mock_routing_service, time_limit_seconds=1)
+    pricing = PricingEngine()
+    
+    return OptimizationService(
+        routing_service=mock_routing_service,
+        pricing_engine=pricing,
+        pooler=pooler,
+        solver=solver
+    )
 
 
 # ============================================================================
-# Flex Score Tests
+# Test Cases
 # ============================================================================
 
-class TestFlexScore:
-    """Tests for flexibility score calculation."""
+@pytest.mark.asyncio
+async def test_simple_pool_two_rides(optimization_service, sample_rides, mock_routing_service):
+    """
+    Test 1: Simple pooling of two compatible rides.
+    Input: 2 rides with overlapping time windows, same direction (ride1, ride2)
+    Expected: 1 vehicle route with 2 rides
+    """
+    rides = [sample_rides[0], sample_rides[1]] # CP and Near CP
     
-    def test_flex_score_zero_buffers(self):
-        """Zero flexibility should give zero score."""
-        score = compute_flex_score(0, 0)
-        assert score == 0.0
+    # Mock RouteSolver to return a valid route
+    # We patch the internal solver call to avoid complex OR-Tools dependency in unit test if strictly needed,
+    # but here we rely on the logic. 
+    # Since we mocked routing service matrix to always return 10, the logic should see them as close.
+    # However, RidePooler geodistance check uses haversine on actual lat/lon.
+    # ride1 and ride2 are very close (~0.1km).
     
-    def test_flex_score_formula(self):
-        """Verify flex score formula: 0.6*before + 0.4*after."""
-        # buffer_before=10, buffer_after=20
-        # Expected: 0.6*10 + 0.4*20 = 6 + 8 = 14
-        score = compute_flex_score(10, 20)
-        assert score == 14.0
+    output = await optimization_service.optimize(rides)
     
-    def test_flex_score_weighted_correctly(self):
-        """Before buffer should have higher weight than after."""
-        before_heavy = compute_flex_score(30, 0)  # 0.6*30 = 18
-        after_heavy = compute_flex_score(0, 30)   # 0.4*30 = 12
-        assert before_heavy > after_heavy
+    assert output.status == "success"
+    assert len(output.routes) == 1
     
-    def test_flex_score_max_flexibility(self):
-        """High flexibility scores should be computed correctly."""
-        # 120 min each: 0.6*120 + 0.4*120 = 72 + 48 = 120
-        score = compute_flex_score(120, 120)
-        assert score == 120.0
+    route = output.routes[0]
+    # Check both rides are in the route
+    ride_ids = set(stop.ride_id for stop in route.stops)
+    # Convert ride IDs to string for comparison if they are UUIDs
+    assert str(rides[0].id) in ride_ids
+    assert str(rides[1].id) in ride_ids
+    
+    # Check capacity used
+    assert route.capacity_used == 2
 
-
-# ============================================================================
-# User Savings Tests
-# ============================================================================
-
-class TestUserSavings:
-    """Tests for user savings calculation."""
+@pytest.mark.asyncio
+async def test_incompatible_time_windows(optimization_service, sample_rides):
+    """
+    Test 2: Rides with incompatible time windows.
+    Input: 2 rides with non-overlapping time windows
+    Expected: 2 separate vehicle routes
+    """
+    now = datetime.now()
+    ride1 = sample_rides[0]
     
-    def test_savings_zero_flex(self):
-        """Zero flexibility should give zero savings."""
-        savings = compute_user_savings(0.0)
-        assert savings == 0.0
+    # Create incompatible ride (1 hour later)
+    ride4 = RideRequest(
+        id=uuid.uuid4(),
+        user_id="user4",
+        pickup=ride1.pickup,
+        dropoff=ride1.dropoff,
+        time_window=TimeWindow(
+            earliest=now + timedelta(hours=2), 
+            latest=now + timedelta(hours=3),
+            preferred=now + timedelta(hours=2, minutes=30)
+        ),
+        num_passengers=1,
+        status=RideStatus.REQUESTED,
+        created_at=now
+    )
     
-    def test_savings_max_cap(self):
-        """Savings should be capped at 30%."""
-        # Very high flex score should still cap at 30%
-        savings = compute_user_savings(200.0)
-        max_savings = BASE_RIDE_COST * MAX_DISCOUNT_RATIO
-        assert savings == max_savings
+    output = await optimization_service.optimize([ride1, ride4])
     
-    def test_savings_proportional(self):
-        """Savings should be proportional to flex score up to cap."""
-        # flex_score = 60, reference = 120
-        # discount_ratio = min(0.3, 60/120) = min(0.3, 0.5) = 0.3
-        # savings = 100 * 0.3 = 30
-        savings = compute_user_savings(60.0)
-        assert savings == 30.0
-    
-    def test_savings_below_cap(self):
-        """Savings below cap should be calculated correctly."""
-        # flex_score = 30, reference = 120
-        # discount_ratio = 30/120 = 0.25
-        # savings = 100 * 0.25 = 25
-        savings = compute_user_savings(30.0)
-        assert savings == 25.0
+    assert output.status == "success"
+    # Should stay separate because times don't overlap
+    assert len(output.routes) == 2
+    assert output.metrics.vehicles_used == 2 # 2 vehicles for 2 rides
 
-
-# ============================================================================
-# Time Window Tests
-# ============================================================================
-
-class TestTimeWindows:
-    """Tests for time window computation."""
+@pytest.mark.asyncio
+async def test_capacity_constraint(optimization_service, sample_rides):
+    """
+    Test 3: Capacity constraint.
+    Input: 3 rides, each with 2 passengers
+    Expected: At least 2 vehicles (capacity = 4)
+    """
+    now = datetime.now()
+    loc1 = sample_rides[0].pickup
+    loc2 = sample_rides[0].dropoff
     
-    def test_compute_time_window_basic(self):
-        """Basic time window computation."""
-        preferred = datetime(2026, 1, 24, 9, 0, 0)
-        start, end = compute_time_window(preferred, 15, 30)
+    # 3 rides identical but 2 passengers each
+    rides = []
+    for i in range(3):
+        rides.append(RideRequest(
+            id=uuid.uuid4(),
+            user_id=f"user_cap_{i}",
+            pickup=loc1,
+            dropoff=loc2,
+            time_window=TimeWindow(earliest=now, latest=now + timedelta(minutes=60), preferred=now + timedelta(minutes=30)),
+            num_passengers=2, # 2 * 3 = 6 passengers total
+            status=RideStatus.REQUESTED,
+            created_at=now
+        ))
         
-        expected_start = preferred - timedelta(minutes=15)
-        expected_end = preferred + timedelta(minutes=30)
+    output = await optimization_service.optimize(rides)
+    
+    assert output.status == "success"
+    # Total passengers = 6. Max capacity = 4.
+    # Must use at least 2 vehicles.
+    assert len(output.routes) >= 2
+    
+    # Verify no vehicle exceeds capacity
+    for route in output.routes:
+        load = 0
+        max_load = 0
+        for stop in route.stops:
+            if stop.type == "pickup":
+                load += stop.num_passengers
+            else:
+                load -= stop.num_passengers
+            max_load = max(max_load, load)
+        assert max_load <= 4
+
+@pytest.mark.asyncio
+async def test_precedence_constraint(optimization_service, sample_rides):
+    """
+    Test 4: Pickup must occur before dropoff.
+    Input: 1 ride
+    Verify: Pickup occurs before dropoff in route
+    """
+    ride = sample_rides[0]
+    output = await optimization_service.optimize([ride])
+    
+    assert len(output.routes) == 1
+    route = output.routes[0]
+    
+    stops = route.stops
+    # Should only be 2 stops for 1 ride
+    assert len(stops) == 2
+    assert stops[0].type == "pickup"
+    assert stops[1].type == "dropoff"
+    assert stops[0].ride_id == str(ride.id)
+    assert stops[1].ride_id == str(ride.id)
+
+@pytest.mark.asyncio
+async def test_pricing_discount(optimization_service, sample_rides):
+    """
+    Test 5: Pooled rides get validation of cost.
+    Verify: Pricing engine is called and metrics saved.
+    """
+    rides = [sample_rides[0], sample_rides[1]]
+    output = await optimization_service.optimize(rides)
+    
+    assert len(output.routes) == 1
+    route = output.routes[0]
+    
+    # Check revenue is calculated
+    assert route.revenue > 0
+    
+    # Check savings calculated
+    assert output.total_savings >= 0
+    
+    # If using Mock pricing engine, we could verify exact calls, 
+    # but here we verify the output structure contains pricing info.
+
+@pytest.mark.asyncio
+async def test_optimization_timeout(optimization_service, sample_rides):
+    """
+    Test 6: Optimization completes. 
+    (Hard to force actual timeout in unit test without sleep injection, 
+    so we assume it completes and check structure).
+    """
+    # Just run on sample rides
+    output = await optimization_service.optimize(sample_rides)
+    
+    # Should return success or partial
+    assert output.status in ["success", "partial"]
+    assert output.optimization_time_seconds >= 0
+
+@pytest.mark.asyncio
+async def test_geographic_pooling(optimization_service, sample_rides):
+    """
+    Test 7: Geographic proximity logic.
+    Input: 3 rides - 2 close (Delhi), 1 far (Mumbai)
+    Expected: First 2 pooled, third separate
+    """
+    # Rides: 0=Delhi, 1=Delhi, 2=Mumbai
+    output = await optimization_service.optimize(sample_rides)
+    
+    # Should be 2 routes: 1 for Delhi pair, 1 for Mumbai
+    assert len(output.routes) == 2
+    
+    # Find the Mumbai route
+    mumbai_route = next(r for r in output.routes if r.stops[0].ride_id == str(sample_rides[2].id))
+    assert len(mumbai_route.stops) == 2 # Only ride3
+    
+    # Find Delhi route
+    delhi_route = next(r for r in output.routes if r.stops[0].ride_id != str(sample_rides[2].id))
+    assert len(delhi_route.stops) == 4 # ride1 + ride2 (2 stops each)
+
+@pytest.mark.asyncio
+async def test_detour_limit(optimization_service, sample_rides, mock_routing_service):
+    """
+    Test 8: Detour limit prevents pooling.
+    Input: 2 rides where pooling would exceed max_detour
+    Expected: Rides not pooled
+    """
+    ride1 = sample_rides[0]
+    ride2 = sample_rides[1]
+
+    # RidePooler uses _estimate_detour_sync which uses geometric math.
+    # To test the logic that "if detour > max, don't pool", we can patch the internal estimator
+    # or use coordinates that naturally cause a large detour relative to solo.
+    
+    # We choose to patch the estimator to simulate a high detour situation 
+    # (e.g. traffic or road layout that geometric dist doesn't catch, but here we force the value)
+    
+    # We need to patch it on the `pooler` instance inside `optimization_service`
+    with patch.object(optimization_service.pooler, '_estimate_detour_sync', return_value=120.0):
+        output = await optimization_service.optimize([ride1, ride2])
         
-        assert start == expected_start
-        assert end == expected_end
-    
-    def test_time_windows_overlap_true(self):
-        """Overlapping windows should return True."""
-        w1 = (datetime(2026, 1, 24, 9, 0), datetime(2026, 1, 24, 9, 30))
-        w2 = (datetime(2026, 1, 24, 9, 15), datetime(2026, 1, 24, 9, 45))
-        
-        assert time_windows_overlap(w1, w2) is True
-    
-    def test_time_windows_overlap_false(self):
-        """Non-overlapping windows should return False."""
-        w1 = (datetime(2026, 1, 24, 9, 0), datetime(2026, 1, 24, 9, 30))
-        w2 = (datetime(2026, 1, 24, 10, 0), datetime(2026, 1, 24, 10, 30))
-        
-        assert time_windows_overlap(w1, w2) is False
-    
-    def test_time_windows_adjacent(self):
-        """Adjacent windows (touching) should overlap."""
-        w1 = (datetime(2026, 1, 24, 9, 0), datetime(2026, 1, 24, 9, 30))
-        w2 = (datetime(2026, 1, 24, 9, 30), datetime(2026, 1, 24, 10, 0))
-        
-        assert time_windows_overlap(w1, w2) is True
-
-
-# ============================================================================
-# Haversine Distance Tests
-# ============================================================================
-
-class TestHaversineDistance:
-    """Tests for haversine distance calculation."""
-    
-    def test_same_point_zero_distance(self):
-        """Same point should have zero distance."""
-        dist = haversine_distance_km(28.6139, 77.2090, 28.6139, 77.2090)
-        assert dist == 0.0
-    
-    def test_known_distance(self):
-        """Test with known Delhi locations."""
-        # Connaught Place to India Gate (~1.5 km)
-        dist = haversine_distance_km(28.6315, 77.2167, 28.6129, 77.2295)
-        assert 1.0 < dist < 3.0  # Approximate range
-    
-    def test_distance_symmetry(self):
-        """Distance should be symmetric."""
-        d1 = haversine_distance_km(28.6139, 77.2090, 28.5355, 77.3910)
-        d2 = haversine_distance_km(28.5355, 77.3910, 28.6139, 77.2090)
-        assert abs(d1 - d2) < 0.001
-
-
-# ============================================================================
-# Pooling Tests
-# ============================================================================
-
-class TestPooling:
-    """Tests for ride pooling logic."""
-    
-    def test_pool_empty_list(self):
-        """Empty input should return empty clusters."""
-        clusters = pool_rides([])
-        assert clusters == []
-    
-    def test_pool_single_ride(self):
-        """Single ride should form its own cluster."""
-        ride = RideRequest(
-            pickup=Location(lat=28.6139, lng=77.2090),
-            drop=Location(lat=28.5355, lng=77.3910),
-            preferred_time=datetime(2026, 1, 24, 9, 0),
-            buffer_before_min=15,
-            buffer_after_min=30
-        )
-        clusters = pool_rides([ride])
-        
-        assert len(clusters) == 1
-        assert len(clusters[0]) == 1
-    
-    def test_nearby_rides_pooled(self, sample_rides):
-        """Nearby rides with overlapping windows should be pooled."""
-        clusters = pool_rides(sample_rides)
-        
-        # First 2 rides and ride 4 are nearby (within 2km)
-        # Ride 3 is far away
-        # So we expect at least 2 clusters
-        assert len(clusters) >= 1
-        assert len(clusters) <= len(sample_rides)
-    
-    def test_far_rides_not_pooled(self):
-        """Rides with pickups > 2km apart should not be pooled."""
-        ride1 = RideRequest(
-            pickup=Location(lat=28.6139, lng=77.2090),  # Delhi
-            drop=Location(lat=28.5355, lng=77.3910),
-            preferred_time=datetime(2026, 1, 24, 9, 0),
-            buffer_before_min=15,
-            buffer_after_min=30
-        )
-        ride2 = RideRequest(
-            pickup=Location(lat=19.0760, lng=72.8777),  # Mumbai (far!)
-            drop=Location(lat=19.0330, lng=72.8296),
-            preferred_time=datetime(2026, 1, 24, 9, 0),
-            buffer_before_min=15,
-            buffer_after_min=30
-        )
-        
-        clusters = pool_rides([ride1, ride2])
-        assert len(clusters) == 2  # Each ride in its own cluster
-
-
-# ============================================================================
-# Pricing Tests
-# ============================================================================
-
-class TestPricing:
-    """Tests for pricing calculation."""
-    
-    def test_baseline_profit_formula(self):
-        """Baseline profit should be distance * 10."""
-        pricing = compute_pricing(
-            route_distance_km=15.0,
-            pooling_efficiency=0.0,
-            total_user_savings=0.0
-        )
-        assert pricing.baseline_driver_profit == 150.0
-    
-    def test_pooling_efficiency_bonus(self):
-        """Pooling efficiency should increase driver profit."""
-        pricing = compute_pricing(
-            route_distance_km=15.0,
-            pooling_efficiency=0.20,  # 20% efficiency
-            total_user_savings=0.0
-        )
-        # optimized = 150 * 1.2 = 180
-        assert pricing.optimized_driver_profit == 180.0
-    
-    def test_broker_commission_rate(self):
-        """Broker commission should be 10% of optimized profit."""
-        pricing = compute_pricing(
-            route_distance_km=10.0,
-            pooling_efficiency=0.0,
-            total_user_savings=0.0
-        )
-        # baseline = 100, optimized = 100, commission = 10
-        assert pricing.broker_commission == 10.0
-    
-    def test_user_savings_passed_through(self):
-        """User savings should be included in pricing."""
-        pricing = compute_pricing(
-            route_distance_km=10.0,
-            pooling_efficiency=0.0,
-            total_user_savings=25.0
-        )
-        assert pricing.total_user_savings == 25.0
-
-
-# ============================================================================
-# API Tests
-# ============================================================================
-
-class TestAPI:
-    """Tests for the API endpoint."""
-    
-    def test_health_check(self, test_client):
-        """Health endpoint should return healthy status."""
-        response = test_client.get("/health")
-        assert response.status_code == 200
-        assert response.json()["status"] == "healthy"
-    
-    def test_optimize_endpoint_success(self, test_client, sample_rides):
-        """POST /optimize should return valid output."""
-        # Convert sample rides to JSON-serializable format
-        rides_data = []
-        for ride in sample_rides:
-            rides_data.append({
-                "pickup": {"lat": ride.pickup.lat, "lng": ride.pickup.lng},
-                "drop": {"lat": ride.drop.lat, "lng": ride.drop.lng},
-                "preferred_time": ride.preferred_time.isoformat(),
-                "buffer_before_min": ride.buffer_before_min,
-                "buffer_after_min": ride.buffer_after_min
-            })
-        
-        response = test_client.post(
-            "/optimize",
-            json={"ride_requests": rides_data}
-        )
-        
-        assert response.status_code == 200
-        data = response.json()
-        
-        assert "bundles" in data
-        assert "total_rides_processed" in data
-        assert data["total_rides_processed"] == 4
-        assert len(data["bundles"]) > 0
-    
-    def test_optimize_empty_input(self, test_client):
-        """Empty ride requests should return error."""
-        response = test_client.post(
-            "/optimize",
-            json={"ride_requests": []}
-        )
-        assert response.status_code == 422  # Validation error
-    
-    def test_optimize_single_ride(self, test_client):
-        """Single ride should return single bundle."""
-        response = test_client.post(
-            "/optimize",
-            json={
-                "ride_requests": [{
-                    "pickup": {"lat": 28.6139, "lng": 77.2090},
-                    "drop": {"lat": 28.5355, "lng": 77.3910},
-                    "preferred_time": "2026-01-24T09:00:00",
-                    "buffer_before_min": 15,
-                    "buffer_after_min": 30
-                }]
-            }
-        )
-        
-        assert response.status_code == 200
-        data = response.json()
-        assert data["total_bundles_created"] == 1
-        assert len(data["bundles"]) == 1
-
-
-# ============================================================================
-# Integration Tests
-# ============================================================================
-
-class TestIntegration:
-    """End-to-end integration tests."""
-    
-    def test_full_optimization_flow(self, sample_rides):
-        """Test complete optimization flow."""
-        result = optimize_rides(sample_rides)
-        
-        # Check output structure
-        assert result.total_rides_processed == 4
-        assert result.total_bundles_created >= 1
-        assert len(result.bundles) >= 1
-        
-        # Check each bundle has required fields
-        for bundle in result.bundles:
-            assert len(bundle.ride_request_ids) >= 1
-            assert bundle.route is not None
-            assert bundle.pricing is not None
-            assert bundle.time_window_start is not None
-            assert bundle.time_window_end is not None
-            
-            # Check route has stops
-            assert len(bundle.route.stops) >= 2  # At least pickup and drop
-            
-            # Check pricing is valid
-            assert bundle.pricing.baseline_driver_profit >= 0
-            assert bundle.pricing.optimized_driver_profit >= 0
-            assert bundle.pricing.broker_commission >= 0
-    
-    def test_deterministic_output(self, sample_rides):
-        """Same input should produce same output."""
-        result1 = optimize_rides(sample_rides)
-        result2 = optimize_rides(sample_rides)
-        
-        assert result1.total_bundles_created == result2.total_bundles_created
-        assert result1.total_rides_processed == result2.total_rides_processed
+        # Should be 2 separate routes because detour (120) > max (15)
+        assert len(output.routes) == 2

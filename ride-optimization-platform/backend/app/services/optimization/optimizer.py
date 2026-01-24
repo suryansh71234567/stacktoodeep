@@ -482,7 +482,7 @@ class OptimizationService:
                     optimized_driver_profit=route.revenue,
                     total_user_savings=0.0,
                     broker_commission=route.revenue * 0.15,
-                    pooling_efficiency=len(ride_ids) / 1.0,
+                    pooling_efficiency=compute_pooling_efficiency(len(ride_ids), len(rides)),
                 ),
                 time_window_start=time_start,
                 time_window_end=time_end,
