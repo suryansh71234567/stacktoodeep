@@ -58,19 +58,6 @@ In the current mobility market, price is king. However, **Time Flexibility** is 
 * **Optimization:** Google OR-Tools (VRP Solver)
 * **AI Agents:** LangChain + OpenAI API (Negotiation Logic)
 
----
-
-## 📸 Screenshots
-
-| **Landing Dashboard** | **Bidding Agent** |
-|:---:|:---:|
-| *Full-screen map with floating glass booking form* | *Real-time negotiation logs & visualizations* |
-
-| **Success Ticket** | **Mobile Responsive** |
-|:---:|:---:|
-| *QR Code coupon generated after optimization* | *Fully responsive design for all devices* |
-
----
 
 ##  Getting Started
 
