@@ -1,0 +1,14 @@
+# FastAPI and Server
+fastapi>=0.104.0
+uvicorn>=0.24.0
+
+# Data Validation
+pydantic>=2.5.0
+
+# Numerical & Optimization
+numpy>=1.24.0
+networkx>=3.0
+
+# Testing
+pytest>=7.4.0
+httpx>=0.25.0

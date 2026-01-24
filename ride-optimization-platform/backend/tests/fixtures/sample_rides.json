@@ -1,0 +1,54 @@
+[
+    {
+        "pickup": {
+            "lat": 28.6139,
+            "lng": 77.2090
+        },
+        "drop": {
+            "lat": 28.5355,
+            "lng": 77.3910
+        },
+        "preferred_time": "2026-01-24T09:00:00",
+        "buffer_before_min": 15,
+        "buffer_after_min": 30
+    },
+    {
+        "pickup": {
+            "lat": 28.6150,
+            "lng": 77.2100
+        },
+        "drop": {
+            "lat": 28.5400,
+            "lng": 77.3900
+        },
+        "preferred_time": "2026-01-24T09:10:00",
+        "buffer_before_min": 10,
+        "buffer_after_min": 20
+    },
+    {
+        "pickup": {
+            "lat": 28.7041,
+            "lng": 77.1025
+        },
+        "drop": {
+            "lat": 28.4595,
+            "lng": 77.0266
+        },
+        "preferred_time": "2026-01-24T09:00:00",
+        "buffer_before_min": 20,
+        "buffer_after_min": 40
+    },
+    {
+        "pickup": {
+            "lat": 28.6200,
+            "lng": 77.2150
+        },
+        "drop": {
+            "lat": 28.5500,
+            "lng": 77.4000
+        },
+        "preferred_time": "2026-01-24T09:05:00",
+        "buffer_before_min": 15,
+        "buffer_after_min": 25
+    }
+]
