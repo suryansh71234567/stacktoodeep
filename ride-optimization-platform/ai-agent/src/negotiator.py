@@ -1,94 +1,45 @@
-import time
 import random
+import time
 import json
-from colorama import Fore, Style, init
-from bidding_strategy import BiddingEngine
 
-# Initialize colors for terminal
-init(autoreset=True)
+class RideNegotiator:
+    def __init__(self, ride_id, standard_price):
+        self.ride_id = ride_id
+        self.standard_price = standard_price
+        self.current_bid = standard_price * 0.6  # Start low (60%)
+        self.max_price = standard_price * 0.85   # Don't pay more than 85%
 
-class NegotiationSimulation:
-    def __init__(self, route_name, standard_price):
-        self.route_name = route_name
-        self.engine = BiddingEngine(standard_price)
-        self.current_offer = self.engine.get_initial_bid()
-        self.is_deal_closed = False
-
-    def simulated_driver_response(self, offer):
-        """
-        MOCK AI: Simulates a driver without needing an API Key.
-        In production, replace this with LangChain call.
-        """
-        time.sleep(1.5) # Simulate thinking time
+    def start_negotiation(self):
+        """Simulates a conversation with Uber/Ola APIs"""
+        history = []
         
-        threshold = self.engine.standard_price * 0.90
+        # Step 1: Initial Bid
+        print(f"[AGENT] analyzing route {self.ride_id}...")
+        time.sleep(1)
+        history.append({"role": "agent", "message": f"Offering ₹{self.current_bid} for ride."})
         
-        if offer >= threshold:
-            return {
-                "message": "Okay bhai, chalo. Petrol is expensive but I will take it.",
-                "accepted": True,
-                "counter_offer": offer
-            }
-        else:
-            # Driver counters with a higher price
-            counter = max(offer + random.randint(30, 80), int(self.engine.standard_price * 0.85))
-            rejections = [
-                "Too low! Petrol is ₹100/liter.",
-                "Are you joking? I can't go for that.",
-                "Add some more, sir. Traffic is bad.",
-                "This is peak hour. Give me better price."
-            ]
-            return {
-                "message": random.choice(rejections),
-                "accepted": False,
-                "counter_offer": counter
-            }
-
-    def start(self):
-        print(f"{Fore.CYAN}🚀 STARTING NEGOTIATION FOR: {self.route_name}")
-        print(f"{Fore.CYAN}💰 Standard Market Rate: ₹{self.engine.standard_price}")
-        print(f"{Fore.CYAN}🎯 Target Price: ₹{self.engine.max_price}")
-        print("-" * 50)
-
-        step = 1
-        while not self.is_deal_closed and step <= 5:
-            print(f"\n{Fore.YELLOW}[ROUND {step}]")
-            
-            # 1. Agent makes offer
-            print(f"{Fore.GREEN}🤖 Nexus Agent: {Style.RESET_ALL}I can offer you ₹{self.current_offer}. We have 3 passengers ready.")
-
-            # 2. Driver responds
-            response = self.simulated_driver_response(self.current_offer)
-            print(f"{Fore.RED}🚕 Driver Bot: {Style.RESET_ALL}{response['message']} (Asks ₹{response['counter_offer']})")
-
-            # 3. Decision
-            if response['accepted']:
-                print(f"\n{Fore.GREEN}✅ DEAL SEALED at ₹{self.current_offer}!")
-                self.is_deal_closed = True
-                self.print_summary(self.current_offer)
-            else:
-                # Calculate next bid
-                new_bid = self.engine.calculate_next_bid(response['counter_offer'])
-                
-                # Check if we walked away
-                if new_bid == self.current_offer:
-                    print(f"\n{Fore.RED}❌ NEGOTIATION FAILED. Driver wants too much.")
-                    break
-                    
-                self.current_offer = new_bid
-                step += 1
-
-    def print_summary(self, final_price):
-        stats = self.engine.evaluate_deal(final_price)
-        print("-" * 50)
-        print(f"{Fore.MAGENTA}🎉 SUCCESS TICKET GENERATED")
-        print(f"Standard Price : ₹{stats['standard_rate']}")
-        print(f"Negotiated Price: ₹{stats['final_rate']}")
-        print(f"Total Savings   : ₹{stats['savings']} ({stats['discount_percent']}%)")
-        print(f"Coupon Code     : NEX-{random.randint(1000,9999)}")
-        print("-" * 50)
+        # Step 2: Driver Rejection (Simulated)
+        time.sleep(1)
+        driver_ask = self.standard_price * 0.95
+        history.append({"role": "driver", "message": f"Too low. Market rate is ₹{self.standard_price}. I want ₹{driver_ask}."})
+        
+        # Step 3: Agent Counter-Bid
+        time.sleep(1)
+        self.current_bid = (self.current_bid + driver_ask) / 2
+        history.append({"role": "agent", "message": f"Updated offer: ₹{int(self.current_bid)}. I have 3 passengers ready."})
+        
+        # Step 4: Agreement
+        time.sleep(1)
+        history.append({"role": "driver", "message": "Accepted. Sending vehicle details."})
+        
+        return {
+            "status": "success",
+            "final_price": int(self.current_bid),
+            "logs": history
+        }
 
 if __name__ == "__main__":
-    # Test Run
-    sim = NegotiationSimulation("Roorkee -> Dehradun", 800)
-    sim.start()
+    # Test run
+    agent = RideNegotiator("RIDE-101", 800)
+    result = agent.start_negotiation()
+    print(json.dumps(result, indent=2))

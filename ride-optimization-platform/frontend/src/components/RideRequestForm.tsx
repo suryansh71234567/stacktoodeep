@@ -1,176 +1,183 @@
-import React, { useState } from 'react';
-import { Clock, ArrowRight, Loader2, Navigation, Car, Users, Briefcase } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { Calendar, Clock, MapPin, Navigation, Search } from 'lucide-react';
+import { searchLocations, calculateHaversineDistance, LocationData } from '../utils/distance';
 
-interface Props {
+interface FormProps {
   onOptimize: () => void;
   patience: number;
   setPatience: (val: number) => void;
+  setTripDistance: (km: number) => void;
 }
 
-interface LocationResult { display_name: string; lat: string; lon: string; }
+export default function RideRequestForm({ onOptimize, patience, setPatience, setTripDistance }: FormProps) {
+  // 1. Initialize with Valid Coords (Roorkee -> Dehradun)
+  // This ensures the initial price is REAL, not hardcoded 55km.
+  const [pickupCoords, setPickupCoords] = useState<{lat: number, lon: number} | null>({ lat: 29.8543, lon: 77.8880 });
+  const [dropCoords, setDropCoords] = useState<{lat: number, lon: number} | null>({ lat: 30.3165, lon: 78.0322 });
 
-const CAR_TYPES = [
-  { id: 'mini', name: 'Mini', icon: Car, desc: 'Hatchback', price: '1x' },
-  { id: 'sedan', name: 'Sedan', icon: Briefcase, desc: 'Sedan', price: '1.2x' },
-  { id: 'suv', name: 'SUV', icon: Users, desc: 'SUV/MUV', price: '1.5x' },
-];
+  const [pickupQuery, setPickupQuery] = useState("IIT Roorkee");
+  const [dropQuery, setDropQuery] = useState("Clock Tower, Dehradun");
+  
+  const [pickupSuggestions, setPickupSuggestions] = useState<LocationData[]>([]);
+  const [dropSuggestions, setDropSuggestions] = useState<LocationData[]>([]);
 
-const RideRequestForm: React.FC<Props> = ({ onOptimize, patience, setPatience }) => {
-  const [pickupQuery, setPickupQuery] = useState('');
-  const [dropQuery, setDropQuery] = useState('');
-  const [pickupSuggestions, setPickupSuggestions] = useState<LocationResult[]>([]);
-  const [dropSuggestions, setDropSuggestions] = useState<LocationResult[]>([]);
-  const [pickupValid, setPickupValid] = useState(false);
-  const [dropValid, setDropValid] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [selectedCar, setSelectedCar] = useState('mini');
+  // Time State
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [time, setTime] = useState("10:00");
 
-  const searchLocation = async (query: string, type: 'pickup' | 'drop') => {
-    if (query.length < 3) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=5`);
-      const data = await res.json();
-      type === 'pickup' ? setPickupSuggestions(data) : setDropSuggestions(data);
-    } catch (err) { console.error(err); } 
-    finally { setLoading(false); }
-  };
+  // --- LIVE SEARCH HANDLER ---
+  const handleSearch = async (query: string, type: 'pickup' | 'drop') => {
+    if (type === 'pickup') setPickupQuery(query);
+    else setDropQuery(query);
 
-  const selectLocation = (loc: LocationResult, type: 'pickup' | 'drop') => {
-    if (type === 'pickup') {
-      setPickupQuery(loc.display_name.split(',')[0]);
-      setPickupSuggestions([]);
-      setPickupValid(true);
+    if (query.length > 2) {
+      const results = await searchLocations(query);
+      if (type === 'pickup') setPickupSuggestions(results);
+      else setDropSuggestions(results);
     } else {
-      setDropQuery(loc.display_name.split(',')[0]);
-      setDropSuggestions([]);
-      setDropValid(true);
+      if (type === 'pickup') setPickupSuggestions([]);
+      else setDropSuggestions([]);
     }
   };
 
+  // --- SELECTION HANDLER (Crucial Step) ---
+  const selectLocation = (loc: LocationData, type: 'pickup' | 'drop') => {
+    // 1. Parse coordinates
+    const coords = { lat: parseFloat(loc.lat), lon: parseFloat(loc.lon) };
+    
+    // 2. Update State
+    if (type === 'pickup') {
+      setPickupQuery(loc.display_name.split(',')[0]); 
+      setPickupCoords(coords);
+      setPickupSuggestions([]); 
+    } else {
+      setDropQuery(loc.display_name.split(',')[0]);
+      setDropCoords(coords);
+      setDropSuggestions([]);
+    }
+  };
+
+  // --- CALCULATE DISTANCE AUTOMATICALLY ---
+  useEffect(() => {
+    if (pickupCoords && dropCoords) {
+      const dist = calculateHaversineDistance(
+        pickupCoords.lat, pickupCoords.lon,
+        dropCoords.lat, dropCoords.lon
+      );
+      console.log(`New Distance Calculated: ${dist} km`); // Debug log
+      setTripDistance(dist);
+    }
+  }, [pickupCoords, dropCoords, setTripDistance]);
+
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-      className="glass-panel p-8 rounded-[2rem] w-full relative z-20 border-t-4 border-t-yellow-400 shadow-2xl"
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <h2 className="text-2xl font-bold text-white tracking-tight">Book Your Ride</h2>
-        <span className="bg-yellow-400/20 text-yellow-400 text-xs font-bold px-3 py-1.5 rounded-lg border border-yellow-400/20">
-          BEST PRICE GUARANTEE
-        </span>
-      </div>
-
-      <div className="space-y-6 relative">
+    <div className="space-y-6">
+      
+      {/* 1. LOCATION SEARCH INPUTS */}
+      <div className="space-y-4 relative">
         
-        {/* PICKUP */}
-        <div className="relative z-50 group">
-          <label className="text-xs font-bold text-slate-300 uppercase ml-1 mb-2 block tracking-wider">Pickup Location</label>
-          <div className="relative">
-            <div className={`absolute left-4 top-4 w-3 h-3 rounded-full ${pickupValid ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-            {/* Increased padding (p-4) and Font Size (text-lg) */}
-            <input 
-              type="text" value={pickupQuery}
-              onChange={(e) => { setPickupQuery(e.target.value); setPickupValid(false); searchLocation(e.target.value, 'pickup'); }}
-              placeholder="Enter City, Airport, or Hotel" 
-              className="glass-input w-full pl-10 p-4 rounded-xl text-lg font-medium placeholder:text-slate-500"
-            />
-            {loading && <Loader2 className="absolute right-4 top-4 animate-spin text-slate-400" size={20} />}
-          </div>
-          
-          <AnimatePresence>
-            {pickupSuggestions.length > 0 && (
-              <motion.ul initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute w-full bg-slate-900 border border-slate-700 rounded-xl shadow-2xl mt-2 overflow-hidden z-50">
-                {pickupSuggestions.map((loc, idx) => (
-                  <li key={idx} onClick={() => selectLocation(loc, 'pickup')} className="p-4 hover:bg-slate-800 cursor-pointer text-sm text-slate-200 border-b border-slate-800 flex items-center gap-3">
-                    <Navigation size={16} className="text-slate-500" /> {loc.display_name}
-                  </li>
-                ))}
-              </motion.ul>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* DROPOFF */}
-        <div className="relative z-40 group">
-          <label className="text-xs font-bold text-slate-300 uppercase ml-1 mb-2 block tracking-wider">Dropoff Location</label>
-          <div className="relative">
-            <div className={`absolute left-4 top-4 w-3 h-3 rounded-full ${dropValid ? 'bg-red-500' : 'bg-slate-500'}`}></div>
-            <input 
-              type="text" value={dropQuery}
-              onChange={(e) => { setDropQuery(e.target.value); setDropValid(false); searchLocation(e.target.value, 'drop'); }}
-              placeholder="Enter Destination" 
-              className="glass-input w-full pl-10 p-4 rounded-xl text-lg font-medium placeholder:text-slate-500"
-            />
-          </div>
-          <AnimatePresence>
-            {dropSuggestions.length > 0 && (
-              <motion.ul initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute w-full bg-slate-900 border border-slate-700 rounded-xl shadow-2xl mt-2 overflow-hidden z-50">
-                {dropSuggestions.map((loc, idx) => (
-                  <li key={idx} onClick={() => selectLocation(loc, 'drop')} className="p-4 hover:bg-slate-800 cursor-pointer text-sm text-slate-200 border-b border-slate-800 flex items-center gap-3">
-                    <Navigation size={16} className="text-slate-500" /> {loc.display_name}
-                  </li>
-                ))}
-              </motion.ul>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* CAR SELECTION - Bigger Cards */}
-        <div className="pt-2">
-          <label className="text-xs font-bold text-slate-300 uppercase ml-1 mb-3 block tracking-wider">Select Vehicle</label>
-          <div className="grid grid-cols-3 gap-3">
-            {CAR_TYPES.map((car) => (
-              <div 
-                key={car.id}
-                onClick={() => setSelectedCar(car.id)}
-                className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col items-center text-center
-                  ${selectedCar === car.id 
-                    ? 'bg-yellow-500 text-black border-yellow-500 shadow-xl shadow-yellow-500/20 scale-105' 
-                    : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:bg-slate-800 hover:border-slate-600'}`}
-              >
-                <car.icon size={28} className="mb-2" />
-                <span className="text-sm font-bold">{car.name}</span>
-                <span className={`text-xs ${selectedCar === car.id ? 'text-black/80 font-semibold' : 'text-slate-500'}`}>{car.desc}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* PATIENCE SLIDER - Bigger Touch Area */}
-        <div className="pt-6 border-t border-white/10 relative z-10">
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center gap-2">
-              <Clock size={20} className="text-yellow-400" />
-              <span className="text-base font-bold text-white">Flexibility Savings</span>
-            </div>
-            <span className="text-yellow-400 font-bold bg-yellow-400/10 px-4 py-1.5 rounded-lg text-sm border border-yellow-400/20">
-              {patience} min wait
-            </span>
+        {/* PICKUP INPUT */}
+        <div className="relative group z-30">
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">
+            <MapPin size={18} />
           </div>
           <input 
-            type="range" min="0" max="60" step="5" value={patience}
-            onChange={(e) => setPatience(Number(e.target.value))}
-            className="w-full accent-yellow-400 cursor-pointer h-2 rounded-lg bg-slate-700 appearance-none"
+            type="text"
+            value={pickupQuery}
+            onChange={(e) => handleSearch(e.target.value, 'pickup')}
+            className="w-full bg-slate-900 border border-white/10 rounded-xl py-4 pl-12 pr-4 text-white font-medium focus:outline-none focus:border-yellow-400/50 transition-all placeholder:text-slate-600"
+            placeholder="Search Pickup (Click list to select!)"
           />
+          
+          {/* Pickup Suggestions */}
+          {pickupSuggestions.length > 0 && (
+            <div className="absolute top-full left-0 w-full bg-slate-800 border border-white/10 rounded-xl mt-1 shadow-2xl overflow-hidden max-h-60 overflow-y-auto z-40">
+              {pickupSuggestions.map((loc, i) => (
+                <div 
+                  key={i} 
+                  onClick={() => selectLocation(loc, 'pickup')}
+                  className="p-3 hover:bg-white/10 cursor-pointer border-b border-white/5 last:border-0 text-sm text-slate-300 truncate"
+                >
+                  {loc.display_name}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* ACTION BUTTON - Massive */}
-        <button 
-          onClick={onOptimize}
-          disabled={!pickupValid || !dropValid}
-          className={`w-full py-5 rounded-2xl font-bold text-black shadow-lg flex items-center justify-center gap-3 mt-4 transition-all text-base uppercase tracking-wider
-            ${pickupValid && dropValid 
-              ? 'bg-yellow-400 hover:bg-yellow-300 hover:shadow-yellow-400/40 hover:scale-[1.02] cursor-pointer' 
-              : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
-            }`}
-        >
-          {pickupValid && dropValid ? 'Search Optimized Cabs' : 'Select Locations First'} <ArrowRight size={20} />
-        </button>
-      </div>
-    </motion.div>
-  );
-};
+        {/* DROP INPUT */}
+        <div className="relative group z-20">
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">
+            <Navigation size={18} />
+          </div>
+          <input 
+            type="text"
+            value={dropQuery}
+            onChange={(e) => handleSearch(e.target.value, 'drop')}
+            className="w-full bg-slate-900 border border-white/10 rounded-xl py-4 pl-12 pr-4 text-white font-medium focus:outline-none focus:border-yellow-400/50 transition-all placeholder:text-slate-600"
+            placeholder="Search Drop (Click list to select!)"
+          />
 
-export default RideRequestForm;
+          {/* Drop Suggestions */}
+          {dropSuggestions.length > 0 && (
+            <div className="absolute top-full left-0 w-full bg-slate-800 border border-white/10 rounded-xl mt-1 shadow-2xl overflow-hidden max-h-60 overflow-y-auto z-40">
+              {dropSuggestions.map((loc, i) => (
+                <div 
+                  key={i} 
+                  onClick={() => selectLocation(loc, 'drop')}
+                  className="p-3 hover:bg-white/10 cursor-pointer border-b border-white/5 last:border-0 text-sm text-slate-300 truncate"
+                >
+                  {loc.display_name}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 2. DATE & TIME (Standard Inputs) */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-slate-900 border border-white/10 rounded-xl p-2 flex items-center gap-3">
+           <div className="p-2 bg-white/5 rounded-lg text-slate-400"><Calendar size={18} /></div>
+           <div className="flex-1">
+             <p className="text-[10px] text-slate-500 font-bold uppercase">Date</p>
+             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-transparent text-white text-sm font-bold focus:outline-none [color-scheme:dark]" />
+           </div>
+        </div>
+
+        <div className="bg-slate-900 border border-white/10 rounded-xl p-2 flex items-center gap-3">
+           <div className="p-2 bg-white/5 rounded-lg text-slate-400"><Clock size={18} /></div>
+           <div className="flex-1">
+             <p className="text-[10px] text-slate-500 font-bold uppercase">Time</p>
+             <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full bg-transparent text-white text-sm font-bold focus:outline-none [color-scheme:dark]" />
+           </div>
+        </div>
+      </div>
+
+      {/* 3. SLIDER */}
+      <div className="bg-yellow-400/5 border border-yellow-400/20 rounded-2xl p-5">
+        <div className="flex justify-between items-center mb-4">
+          <label className="text-yellow-400 font-bold text-sm flex items-center gap-2">
+            <Clock size={16} /> Buffer Time
+          </label>
+          <span className="bg-yellow-400 text-black text-xs font-bold px-2 py-1 rounded">
+            {patience} min wait
+          </span>
+        </div>
+        <input 
+          type="range" min="0" max="60" value={patience} 
+          onChange={(e) => setPatience(Number(e.target.value))}
+          className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-yellow-400"
+        />
+        <div className="flex justify-between mt-2 text-[10px] text-slate-500 font-medium">
+          <span>Urgent (0m)</span>
+          <span>Max Savings (60m)</span>
+        </div>
+      </div>
+
+      <button onClick={onOptimize} className="w-full bg-yellow-400 hover:bg-yellow-300 text-black font-black py-4 rounded-xl text-lg uppercase tracking-wide transition-all shadow-lg">
+        Search Optimized Cabs
+      </button>
+
+    </div>
+  );
+}

@@ -5,26 +5,59 @@ import DiscountCalculator from '../components/DiscountCalculator';
 import BiddingVisualization from '../components/BiddingVisualization';
 import MapDisplay from '../components/MapDisplay';
 import SuccessTicket from '../components/SuccessTicket';
+import ConnectWallet from '../components/ConnectWallet';
 import { ShieldCheck, Zap, Globe } from 'lucide-react';
 
 export default function Home() {
   const [patience, setPatience] = useState(15);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [showTicket, setShowTicket] = useState(false);
+  
+  // NEW STATE: Trip Distance (Shared between Form and Calculator)
+  const [tripDistance, setTripDistance] = useState(55); 
 
-  // THE "GAME LOOP" LOGIC
+  const [userWallet, setUserWallet] = useState(""); 
+  const [apiResult, setApiResult] = useState(null);
+
+  // --- THE REAL BACKEND INTEGRATION ---
   useEffect(() => {
     if (isOptimizing) {
-      // 1. User clicked "Find Driver". Start the Bidding Animation.
-      // 2. Wait 8 seconds (Simulating API negotiation)
-      const timer = setTimeout(() => {
-        setIsOptimizing(false); // Stop Bidding
-        setShowTicket(true);    // Show the Coupon!
-      }, 8000);
+      
+      const requestPayload = {
+        ride_requests: [
+          {
+            pickup: "Roorkee", 
+            drop: "Dehradun",
+            patience: patience,
+            passenger_count: 1
+          }
+        ]
+      };
 
-      return () => clearTimeout(timer);
+      const API_URL = 'http://127.0.0.1:8000/api/v1/optimize'; 
+
+      fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestPayload)
+      })
+      .then(res => res.json())
+      .then(data => {
+        console.log("Optimization Result:", data);
+        setApiResult(data);
+        
+        // Wait 5 seconds for the "Matrix Animation"
+        setTimeout(() => {
+          setIsOptimizing(false);
+          setShowTicket(true);
+        }, 5000); 
+      })
+      .catch(err => {
+        console.error("Backend Connection Error:", err);
+        setIsOptimizing(false);
+      });
     }
-  }, [isOptimizing]);
+  }, [isOptimizing, patience]);
 
   return (
     <div className="h-screen w-screen bg-slate-950 text-slate-50 overflow-hidden relative selection:bg-yellow-400 selection:text-black flex flex-col">
@@ -32,10 +65,16 @@ export default function Home() {
         <title>Bharat Moves | Advanced Ride Optimization</title>
       </Head>
 
-      {/* 0. SUCCESS MODAL (Overlays everything when active) */}
-      {showTicket && <SuccessTicket onClose={() => setShowTicket(false)} />}
+      {/* 0. SUCCESS MODAL */}
+      {showTicket && (
+        <SuccessTicket 
+          onClose={() => setShowTicket(false)} 
+          data={apiResult}           
+          walletAddress={userWallet} 
+        />
+      )}
 
-      {/* 1. NAVBAR (Fixed Top) */}
+      {/* 1. NAVBAR */}
       <nav className="w-full h-20 border-b border-white/5 bg-slate-900/80 backdrop-blur-md flex-none z-50">
         <div className="w-full h-full px-8 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -46,12 +85,11 @@ export default function Home() {
               <h1 className="text-2xl font-black tracking-tighter text-white leading-none">BHARAT<span className="text-yellow-400">MOVES</span></h1>
             </div>
           </div>
+          
           <div className="flex items-center gap-6 text-sm font-bold text-slate-300">
             <span className="hidden md:block hover:text-yellow-400 cursor-pointer transition">Drive</span>
-            <span className="hidden md:block hover:text-yellow-400 cursor-pointer transition">Enterprise</span>
-            <button className="bg-white text-black px-6 py-2.5 rounded-full font-bold hover:bg-yellow-400 transition shadow-lg">
-              Sign In
-            </button>
+            {/* CONNECT WALLET BUTTON */}
+            <ConnectWallet onConnect={setUserWallet} />
           </div>
         </div>
       </nav>
@@ -78,15 +116,19 @@ export default function Home() {
             </p>
           </div>
 
-          {/* The Booking Form */}
+          {/* THE BOOKING FORM (Now passes distance setter) */}
           <RideRequestForm 
             onOptimize={() => setIsOptimizing(true)} 
             patience={patience} 
-            setPatience={setPatience} 
+            setPatience={setPatience}
+            setTripDistance={setTripDistance} // <--- Added Prop
           />
 
-          {/* Savings Calculator */}
-          <DiscountCalculator patience={patience} />
+          {/* SAVINGS CALCULATOR (Now receives dynamic distance) */}
+          <DiscountCalculator 
+            patience={patience} 
+            distance={tripDistance} // <--- Added Prop
+          />
           
           {/* Trust Footers */}
           <div className="mt-auto pt-8 border-t border-white/5 flex items-center gap-6 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
@@ -104,7 +146,7 @@ export default function Home() {
         {/* RIGHT PANEL (Map & Agent Overlay) */}
         <div className="hidden lg:block flex-1 h-full relative bg-slate-900">
           
-          {/* Agent Bidding Overlay (Only appears when optimizing) */}
+          {/* Agent Bidding Overlay */}
           {isOptimizing && (
             <div className="absolute top-8 left-8 z-50 w-96 animate-in fade-in zoom-in duration-300 drop-shadow-2xl">
               <BiddingVisualization active={true} />
@@ -113,7 +155,6 @@ export default function Home() {
 
           {/* Map Component */}
           <div className="w-full h-full relative">
-             {/* Gradient Fade to blend map with sidebar */}
              <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-slate-950 to-transparent z-20 pointer-events-none"></div>
              <MapDisplay />
           </div>
