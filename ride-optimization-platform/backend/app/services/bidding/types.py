@@ -9,7 +9,7 @@ Defines typed structures for the bidding lifecycle:
 """
 from datetime import datetime
 from typing import List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class Location(BaseModel):
@@ -31,8 +31,8 @@ class PreBiddingPayload(BaseModel):
     distance: float = Field(..., ge=0, description="Total route distance in km")
     max_bidding_price: float = Field(..., ge=0, description="Maximum allowed bid price")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "bundle_id": "550e8400-e29b-41d4-a716-446655440000",
                 "time": "2026-01-24T09:00:00",
@@ -41,6 +41,7 @@ class PreBiddingPayload(BaseModel):
                 "max_bidding_price": 180.0
             }
         }
+    )
 
 
 class WinningBid(BaseModel):
@@ -52,13 +53,14 @@ class WinningBid(BaseModel):
     company_id: str = Field(..., description="Winning company identifier")
     bid_value: float = Field(..., ge=0, description="Winning bid amount")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "company_id": "company_001",
                 "bid_value": 165.0
             }
         }
+    )
 
 
 class CompanyPayload(BaseModel):
@@ -74,8 +76,8 @@ class CompanyPayload(BaseModel):
     user_ids: List[str] = Field(..., description="User identifiers in bundle")
     coupon_code: str = Field(..., description="Auto-generated coupon code")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "exact_route": "pickup_user1->pickup_user2->drop_user1->drop_user2",
                 "pickup_points": [{"lat": 28.61, "lng": 77.20}],
@@ -84,6 +86,7 @@ class CompanyPayload(BaseModel):
                 "coupon_code": "RIDE-A1B2C3D4"
             }
         }
+    )
 
 
 class UserPayload(BaseModel):
@@ -96,11 +99,12 @@ class UserPayload(BaseModel):
     pickup_time: datetime = Field(..., description="Scheduled pickup time")
     pickup_location: Location = Field(..., description="Pickup coordinates")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "coupon_code": "RIDE-A1B2C3D4",
                 "pickup_time": "2026-01-24T09:00:00",
                 "pickup_location": {"lat": 28.61, "lng": 77.20}
             }
         }
+    )

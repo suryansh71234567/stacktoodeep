@@ -313,9 +313,15 @@ class TestSelectWinner:
         assert winner['bid_value'] == 165.0
     
     def test_no_bids_raises(self):
-        """Should raise if no bids found."""
+        """Should raise if no bids found (auction unsold)."""
         adapter = MagicMock()
-        adapter.fetch_bids = MagicMock(return_value=[])
+        # Mock finalize_auction to return zero address (no winner)
+        adapter.finalize_auction = MagicMock(return_value={
+            "winner": "0x0000000000000000000000000000000000000000",
+            "winningBid": 0,
+            "finalized": True
+        })
+        adapter.start_commit = MagicMock()
         set_blockchain_adapter(adapter)
         start_bidding("bundle_123")
         

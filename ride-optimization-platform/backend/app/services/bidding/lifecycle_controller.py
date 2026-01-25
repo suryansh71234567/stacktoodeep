@@ -7,7 +7,7 @@ This module orchestrates phases and triggers blockchain adapter methods.
 State Machine:
     IDLE → COMMIT → REVEAL → FINALIZED
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, Optional
 
@@ -37,7 +37,7 @@ class BiddingState:
     def set(self, bundle_id: str, phase: BiddingPhase, **kwargs) -> None:
         self._states[bundle_id] = {
             "phase": phase,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             **kwargs
         }
     
@@ -110,7 +110,7 @@ def start_bidding(bundle_id: str) -> None:
     _bidding_state.set(
         bundle_id,
         BiddingPhase.COMMIT,
-        started_at=datetime.utcnow().isoformat()
+        started_at=datetime.now(timezone.utc).isoformat()
     )
 
 
@@ -169,7 +169,7 @@ def end_bidding(bundle_id: str) -> Dict[str, Any]:
         bundle_id, 
         BiddingPhase.FINALIZED,
         winner=winner,
-        finalized_at=datetime.utcnow().isoformat()
+        finalized_at=datetime.now(timezone.utc).isoformat()
     )
     
     return winner
