@@ -78,15 +78,10 @@ class AiAgentService:
         # In a real system, this would call an x402 gateway
         tx_hash = await self._execute_x402_payment(winner, quoted_cost_scaled)
         
-        # 2. Record payment on-chain
-        # We need a reverse mapping of bundle_hash -> bundle_id for our adapter
-        # For simulation, we'll use a placeholder or assume the adapter can use the hash.
-        # Actually, our adapter's record_payment takes bundle_id and re-hashes it.
-        # We'll mock the bundle_id as "bundle_" + hash_prefix for this MVP.
-        mock_bundle_id = f"auto_bundle_{bundle_hash.hex()[:8]}"
-        
-        self.adapter.record_payment(
-            bundle_id=mock_bundle_id,
+        # 2. Record payment on-chain using the ORIGINAL bundleHash
+        # This ensures the payment is recorded under the same hash as the auction
+        self.adapter.record_payment_raw(
+            bundle_hash=bundle_hash,
             winner=winner,
             amount_scaled=quoted_cost_scaled,
             offchain_tx_hash=tx_hash

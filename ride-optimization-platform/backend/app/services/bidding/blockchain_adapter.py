@@ -101,3 +101,16 @@ class BlockchainAdapter:
             )
         )
         return receipt.transactionHash.hex()
+
+    def record_payment_raw(self, bundle_hash: bytes, winner: str, amount_scaled: int, offchain_tx_hash: bytes) -> str:
+        """Record off-chain payment using raw bundleHash (for AI Agent use)."""
+        logger.info(f"Recording payment for hash {bundle_hash.hex()} to {winner}")
+        receipt = self._send_transaction(
+            self.payment_contract.functions.recordPayment(
+                bundle_hash, 
+                Web3.to_checksum_address(winner), 
+                amount_scaled, 
+                offchain_tx_hash
+            )
+        )
+        return receipt.transactionHash.hex()

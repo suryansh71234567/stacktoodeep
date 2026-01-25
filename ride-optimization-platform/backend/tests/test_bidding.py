@@ -92,6 +92,12 @@ def mock_blockchain_adapter():
         {"company_id": "company_001", "bid_value": 165.0},
         {"company_id": "company_002", "bid_value": 150.0},
     ])
+    # finalize_auction must return dict with winner info
+    adapter.finalize_auction = MagicMock(return_value={
+        "winner": "company_001",
+        "winningBid": 165000000000000000000,  # 165.0 ETH in wei
+        "finalized": True
+    })
     return adapter
 
 

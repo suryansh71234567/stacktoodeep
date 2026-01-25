@@ -63,19 +63,19 @@ async def test_auction_to_ai_payment_flow():
     
     # 1. Deploy Contracts
     import json
-    with open("c:/coding vs/stacktoodeep/stacktoodeep/ride-optimization-platform/blockchain/out/RideAuction.sol/RideAuction.json") as f:
+    with open("c:/Users/suyas/Desktop/StackTooDeep/ride-optimization-platform/blockchain/artifacts/src/RideAuction.sol/RideAuction.json") as f:
         ride_auction_data = json.load(f)
-    with open("c:/coding vs/stacktoodeep/stacktoodeep/ride-optimization-platform/blockchain/out/PaymentExecutor.sol/PaymentExecutor.json") as f:
+    with open("c:/Users/suyas/Desktop/StackTooDeep/ride-optimization-platform/blockchain/artifacts/src/PaymentExecutor.sol/PaymentExecutor.json") as f:
         payment_executor_data = json.load(f)
 
     # Deploy RideAuction
-    RideAuction = w3.eth.contract(abi=ride_auction_data['abi'], bytecode=ride_auction_data['bytecode']['object'])
+    RideAuction = w3.eth.contract(abi=ride_auction_data['abi'], bytecode=ride_auction_data['bytecode'])
     tx_hash = RideAuction.constructor().transact({'from': admin})
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
     ride_auction_addr = receipt.contractAddress
 
     # Deploy PaymentExecutor
-    PaymentExecutor = w3.eth.contract(abi=payment_executor_data['abi'], bytecode=payment_executor_data['bytecode']['object'])
+    PaymentExecutor = w3.eth.contract(abi=payment_executor_data['abi'], bytecode=payment_executor_data['bytecode'])
     tx_hash = PaymentExecutor.constructor().transact({'from': admin})
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
     payment_executor_addr = receipt.contractAddress

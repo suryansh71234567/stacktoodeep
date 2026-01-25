@@ -118,6 +118,23 @@ contract RideAuction {
     constructor() {
         owner = msg.sender;
         emit OwnershipTransferred(address(0), msg.sender);
+        
+        // Hardcode demo companies as whitelisted bidders
+        // RideShare Alpha (Hardhat Account #1)
+        bidders[0x70997970C51812dc3A010C7d01b50e0d17dc79C8] = true;
+        emit BidderAdded(0x70997970C51812dc3A010C7d01b50e0d17dc79C8);
+        
+        // QuickCab Beta (Hardhat Account #2)
+        bidders[0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC] = true;
+        emit BidderAdded(0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC);
+        
+        // MetroRides Gamma (Hardhat Account #3)
+        bidders[0x90F79bf6EB2c4f870365E785982E1f101E93b906] = true;
+        emit BidderAdded(0x90F79bf6EB2c4f870365E785982E1f101E93b906);
+        
+        // CityWheels Delta (Hardhat Account #4)
+        bidders[0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65] = true;
+        emit BidderAdded(0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65);
     }
 
     // =========================================================================
