@@ -11,9 +11,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
-# Type alias for blockchain adapter (assumed to exist)
-# In production, this would be imported from the blockchain module
-BlockchainAdapter = Any
+from .blockchain_adapter import BlockchainAdapter
 
 
 class BiddingPhase(Enum):
@@ -179,39 +177,20 @@ def end_bidding(bundle_id: str) -> Dict[str, Any]:
 
 def select_winner(bundle_id: str) -> Dict[str, Any]:
     """
-    Select the winning bid for a bundle.
-    
-    Fetches bids from blockchain adapter and selects the one
-    with highest profit share (typically highest bid value).
-    
-    Args:
-        bundle_id: Bundle identifier
-        
-    Returns:
-        Winner dict:
-            {
-                "company_id": str,
-                "bid_value": float
-            }
-            
-    Raises:
-        ValueError: If no bids found
+    Select the winning bid for a bundle via blockchain.
     """
-    # Fetch bids from blockchain
-    bids = []
-    if _blockchain_adapter is not None:
-        bids = _blockchain_adapter.fetch_bids(bundle_id)
+    if _blockchain_adapter is None:
+        raise RuntimeError("Blockchain adapter not configured")
+        
+    # Trigger finalization on chain and get results
+    details = _blockchain_adapter.finalize_auction(bundle_id)
     
-    if not bids:
-        raise ValueError(f"No bids found for bundle {bundle_id}")
-    
-    # Select highest profit share (highest bid value)
-    # In a sealed-bid auction, higher bid = more profit share to platform
-    winning_bid = max(bids, key=lambda b: b.get('bid_value', 0))
-    
+    if not details["winner"] or details["winner"] == "0x0000000000000000000000000000000000000000":
+        raise ValueError(f"No bids found or auction unsold for bundle {bundle_id}")
+        
     return {
-        "company_id": winning_bid['company_id'],
-        "bid_value": winning_bid['bid_value']
+        "company_id": details["winner"],
+        "bid_value": details["winningBid"] / 1e18  # Convert back to ETH for backend logic
     }
 
 

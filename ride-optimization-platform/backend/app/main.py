@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.optimize import router as optimize_router
+from app.api.seed_rides import router as seed_rides_router
 
 
 # Create FastAPI application
@@ -35,6 +36,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(optimize_router)
+app.include_router(seed_rides_router)
 
 
 @app.get("/health")

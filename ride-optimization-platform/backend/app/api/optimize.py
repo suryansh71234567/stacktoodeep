@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.models.optimization import OptimizationInput, OptimizationOutput
 from app.services.optimization.optimizer import optimize_rides
+from app.api.seed_rides import get_seeded_rides
 
 
 router = APIRouter(prefix="/optimize", tags=["optimization"])
@@ -32,8 +33,15 @@ async def optimize_rides_endpoint(input_data: OptimizationInput) -> Optimization
                 detail="At least one ride request is required"
             )
         
-        # Call the optimization service
-        result = optimize_rides(input_data.ride_requests)
+        # Get seeded dummy rides and combine with user request
+        seeded_rides = get_seeded_rides()
+        all_rides = list(input_data.ride_requests) + list(seeded_rides)
+        
+        # Log the combined request for debugging
+        print(f"Optimizing {len(input_data.ride_requests)} user ride(s) + {len(seeded_rides)} seeded ride(s) = {len(all_rides)} total")
+        
+        # Call the optimization service with all rides
+        result = optimize_rides(all_rides)
         
         return result
         
