@@ -19,32 +19,49 @@ export default function Home() {
   const [userWallet, setUserWallet] = useState("");
   const [apiResult, setApiResult] = useState(null);
 
+  // NEW STATE: User's actual coordinates from the form
+  const [pickupCoords, setPickupCoords] = useState<{ lat: number, lon: number } | null>({ lat: 29.8543, lon: 77.8880 });
+  const [dropCoords, setDropCoords] = useState<{ lat: number, lon: number } | null>({ lat: 30.3165, lon: 78.0322 });
+  const [preferredTime, setPreferredTime] = useState<string>(new Date(Date.now() + 3600000).toISOString());
+
   // --- THE REAL BACKEND INTEGRATION ---
   useEffect(() => {
-    if (isOptimizing) {
+    if (isOptimizing && pickupCoords && dropCoords) {
 
+      // Calculate time window based on patience (buffer)
+      const preferred = new Date(preferredTime);
+      const earliest = new Date(preferred.getTime() - 15 * 60 * 1000); // 15 min before
+      const latest = new Date(preferred.getTime() + patience * 60 * 1000); // patience min after
 
       // Construct Payload - Matching Backend Pydantic Model (RideRequest)
       const requestPayload = {
         ride_requests: [
           {
             user_id: "demo_user_001",
-            location_start: {
-              lat: 29.8543,
-              lng: 77.8880 // Roorkee
+            pickup: {
+              latitude: pickupCoords.lat,
+              longitude: pickupCoords.lon,
+              address: "User pickup location"
             },
-            location_end: {
-              lat: 30.3165,
-              lng: 78.0322 // Dehradun
+            dropoff: {
+              latitude: dropCoords.lat,
+              longitude: dropCoords.lon,
+              address: "User dropoff location"
             },
-            ride_time: new Date(new Date().getTime() + 60 * 60 * 1000).toISOString(), // 1 hour from now
-            buffer_after_min: patience, // Maps to 'patience'
-            buffer_before_min: 15 // Default flexibility
+            time_window: {
+              earliest: earliest.toISOString(),
+              preferred: preferred.toISOString(),
+              latest: latest.toISOString()
+            },
+            num_passengers: 1,
+            max_detour_minutes: patience  // Dynamic: equals buffer time
           }
         ]
       };
 
       const API_URL = 'http://127.0.0.1:8000/optimize';
+
+      console.log("Sending payload:", JSON.stringify(requestPayload, null, 2));
 
       fetch(API_URL, {
         method: 'POST',
@@ -67,7 +84,7 @@ export default function Home() {
           setIsOptimizing(false);
         });
     }
-  }, [isOptimizing, patience]);
+  }, [isOptimizing, patience, pickupCoords, dropCoords, preferredTime]);
 
   return (
     <div className="h-screen w-screen bg-slate-950 text-slate-50 overflow-hidden relative selection:bg-yellow-400 selection:text-black flex flex-col">
@@ -131,13 +148,17 @@ export default function Home() {
             onOptimize={() => setIsOptimizing(true)}
             patience={patience}
             setPatience={setPatience}
-            setTripDistance={setTripDistance} // <--- Added Prop
+            setTripDistance={setTripDistance}
+            setPickupCoords={setPickupCoords}
+            setDropCoords={setDropCoords}
+            setPreferredTime={setPreferredTime}
           />
 
-          {/* SAVINGS CALCULATOR (Now receives dynamic distance) */}
+          {/* SAVINGS CALCULATOR (Now receives dynamic distance and time) */}
           <DiscountCalculator
             patience={patience}
-            distance={tripDistance} // <--- Added Prop
+            distance={tripDistance}
+            preferredTime={preferredTime}
           />
 
           {/* Trust Footers */}

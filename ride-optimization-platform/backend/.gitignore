@@ -16,7 +16,6 @@ __pycache__/
 venv/
 env/
 ENV/
-.env/
 
 # -----------------------------------------------------------------------------
 # Environment variables (NEVER COMMIT!)

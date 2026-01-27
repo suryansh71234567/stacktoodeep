@@ -8,7 +8,7 @@ build/
 __pycache__/
 *.pyc
 venv/
-.env
+
 
 # Ignore Hardhat Cache (Blockchain)
 artifacts/

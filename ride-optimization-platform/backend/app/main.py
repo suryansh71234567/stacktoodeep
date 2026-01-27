@@ -21,8 +21,11 @@ async def lifespan(app: FastAPI):
     """
     Application lifespan handler for startup/shutdown events.
     Initializes blockchain adapter if environment variables are set.
+    
+    Note: Dummy users are now generated dynamically per request in optimize.py
+    based on the user's source/destination coordinates.
     """
-    # Startup
+    # Startup - Blockchain
     rpc_url = os.getenv("BLOCKCHAIN_RPC_URL")
     auction_address = os.getenv("RIDE_AUCTION_ADDRESS")
     payment_address = os.getenv("PAYMENT_EXECUTOR_ADDRESS")
@@ -42,6 +45,8 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Failed to initialize blockchain adapter: {e}")
     else:
         logger.warning("Blockchain environment variables not set. Bidding endpoints will return 503.")
+    
+    logger.info("✅ Backend started. Dummy users are generated dynamically per request.")
     
     yield  # App runs here
     
