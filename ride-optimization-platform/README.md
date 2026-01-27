@@ -1,4 +1,12 @@
-# Ride Optimization Platform
+# Ride Optimization Platform 🚖⚡
+
+A decentralized, AI-driven ride optimization and bidding platform.
+
+## 🚀 Key Features
+- **AI-Powered Ride Bundling**: Optimizes routes and pools rides for maximum efficiency.
+- **Blockchain Auction**: Sealed-bid commit-reveal auctions for ride bundles (`RideAuction.sol`).
+- **Automated Bidding Agents**: Autonomous AI agents that bid on auctions (`AutoBidder`).
+- **x402 Payment Settlement**: Simulated AI-to-AI payments verified on-chain.
 
 ## 🏗️ GitHub Repository Structure
 ```
@@ -50,7 +58,13 @@ ride-optimization-platform/
 │   │   │   │
 │   │   │   ├── discount_calculator.py
 │   │   │   ├── pricing_engine.py
-│   │   │   └── driver_matcher.py
+│   │   │   ├── driver_matcher.py
+│   │   │
+│   │   ├── services/bidding/         # 🟢 NEW: Blockchain Bidding Module
+│   │   │   ├── blockchain_adapter.py # Web3 Interface
+│   │   │   ├── lifecycle_controller.py # Auction phase state machine
+│   │   │   ├── auto_bidder.py        # 🤖 Automated Bidding Agent
+│   │   │   └── ai_agent_service.py   # Payment Executor
 │   │   │
 │   │   ├── db/                       # Database
 │   │   │   ├── __init__.py
