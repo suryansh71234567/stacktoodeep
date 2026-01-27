@@ -16,6 +16,8 @@ from pydantic import BaseModel
 
 from app.services.bidding import lifecycle_controller
 from app.services.bidding.lifecycle_controller import BiddingPhase
+from app.services.bidding.auto_bidder import get_auto_bidder
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +72,13 @@ async def start_auction(request: StartAuctionRequest):
             phase=state["phase"].value,
             timestamp=state.get("timestamp")
         )
+        # Trigger automated bidding in background
+        adapter = lifecycle_controller._blockchain_adapter
+        if adapter:
+            auto_bidder = get_auto_bidder(adapter)
+            asyncio.create_task(auto_bidder.run_automation(request.bundle_id))
+            logger.info(f"Started automated bidding for {request.bundle_id}")
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
