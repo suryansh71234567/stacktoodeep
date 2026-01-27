@@ -12,118 +12,72 @@ A decentralized, AI-driven ride optimization and bidding platform.
 ```
 ride-optimization-platform/
 │
-├── frontend/                          # Team Member 1
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── RideRequestForm.tsx
-│   │   │   ├── MapDisplay.tsx
-│   │   │   ├── DiscountCalculator.tsx
-│   │   │   └── BiddingVisualization.tsx
-│   │   ├── pages/
-│   │   ├── hooks/
-│   │   ├── utils/
-│   │   └── styles/
-│   ├── public/
-│   ├── package.json
-│   └── README.md
-│
-├── backend/                           # Team Member 2 (YOU)
-│   ├── app/
-│   │   ├── main.py                   # FastAPI entry point
-│   │   ├── config.py                 # Configuration
-│   │   │
-│   │   ├── api/                      # API routes
-│   │   │   ├── __init__.py
-│   │   │   ├── rides.py             # POST /rides, GET /rides/{id}
-│   │   │   ├── optimize.py          # POST /optimize
-│   │   │   ├── drivers.py           # Driver endpoints
-│   │   │   └── health.py            # Health check
-│   │   │
-│   │   ├── models/                   # Pydantic models (data schemas)
-│   │   │   ├── __init__.py
-│   │   │   ├── ride.py              # RideRequest, RideResponse
-│   │   │   ├── optimization.py      # OptimizationInput, OptimizationOutput
-│   │   │   ├── route.py             # VehicleRoute, Stop
-│   │   │   └── pricing.py           # PricingBreakdown
-│   │   │
-│   │   ├── services/                 # Business logic
-│   │   │   ├── __init__.py
-│   │   │   ├── optimization/        # YOUR MAIN WORK HERE ⭐
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── optimizer.py     # Main optimization orchestrator
-│   │   │   │   ├── pooling.py       # Ride matching logic
-│   │   │   │   ├── routing.py       # Route calculation (OSRM integration)
-│   │   │   │   ├── solver.py        # OR-Tools implementation
-│   │   │   │   └── utils.py         # Helper functions
-│   │   │   │
-│   │   │   ├── discount_calculator.py
-│   │   │   ├── pricing_engine.py
-│   │   │   ├── driver_matcher.py
-│   │   │
-│   │   ├── services/bidding/         # 🟢 NEW: Blockchain Bidding Module
-│   │   │   ├── blockchain_adapter.py # Web3 Interface
-│   │   │   ├── lifecycle_controller.py # Auction phase state machine
-│   │   │   ├── auto_bidder.py        # 🤖 Automated Bidding Agent
-│   │   │   └── ai_agent_service.py   # Payment Executor
-│   │   │
-│   │   ├── db/                       # Database
-│   │   │   ├── __init__.py
-│   │   │   ├── session.py           # DB connection
-│   │   │   └── models.py            # SQLAlchemy models
-│   │   │
-│   │   └── utils/
-│   │       ├── geocoding.py         # Address ↔ coordinates
-│   │       ├── time_windows.py      # Time constraint helpers
-│   │       └── validation.py        # Input validation
-│   │
-│   ├── tests/
-│   │   ├── test_optimization.py     # YOUR TESTS
-│   │   ├── test_api.py
-│   │   └── fixtures/
-│   │       └── sample_rides.json    # Test data
-│   │
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   └── README.md
-│
-├── blockchain/                        # Team Member 3
-│   ├── contracts/
-│   │   ├── RideAuction.sol
-│   │   ├── ReputationNFT.sol
-│   │   └── PaymentEscrow.sol
-│   ├── scripts/
-│   │   ├── deploy.js
-│   │   └── interact.js
-│   ├── test/
-│   ├── hardhat.config.js
-│   └── README.md
-│
-├── ai-agent/                          # Team Member 4
-│   ├── src/
-│   │   ├── negotiator.py
-│   │   ├── bidding_strategy.py
-│   │   └── prompts/
-│   ├── tests/
-│   ├── requirements.txt
-│   └── README.md
-│
-├── shared/                            # Shared code/types
-│   ├── types/
-│   │   ├── ride.types.ts           # TypeScript types
-│   │   └── ride_schema.json        # JSON schema for validation
-│   └── utils/
-│
-├── docs/
-│   ├── API.md                        # API documentation
-│   ├── ARCHITECTURE.md               # System architecture
-│   └── DEMO_SCRIPT.md                # Demo walkthrough
-│
-├── .github/
-│   └── workflows/
-│       └── ci.yml                    # GitHub Actions CI/CD
-│
-├── docker-compose.yml                # Run entire stack locally
-├── .gitignore
-├── README.md                         # Main project README
-└── LICENSE
+├── frontend/                          # React + TypeScript Frontend
+├── backend/                           # FastAPI Backend + Pydantic Models
+├── blockchain/                        # Hardhat + Solidity Contracts
+├── ai-agent/                          # AI Agent (RL/Negotiation)
+├── shared/                            # Shared Types
+└── docker-compose.yml                 # (Optional) Container orchestration
 ```
+
+## 🛠️ Getting Started (Local Development)
+
+### Prerequisites
+- Node.js (v18+)
+- Python (v3.9+)
+- PostgreSQL (running centrally or via Docker)
+- Redis (running locally)
+
+### 1. Blockchain Setup
+Start the local blockchain node first. This simulates the Ethereum network.
+
+```bash
+cd blockchain
+npm install
+npx hardhat node
+```
+*Keep this terminal running!*
+
+**Deploy Contracts:**
+In a new terminal:
+```bash
+cd blockchain
+npx hardhat run scripts/deploy.js --network localhost
+```
+*Note: Copy the deployed contract addresses into `backend/.env` if they change.*
+
+### 2. Backend Setup
+The backend handles optimization, auction orchestration, and serving the API.
+
+```bash
+cd backend
+python -m venv venv
+# Activate venv: source venv/bin/activate (Linux/Mac) or venv\Scripts\activate (Windows)
+pip install -r requirements.txt
+```
+
+**Configuration:**
+Ensure `backend/.env` exists (copy `.env.example` if needed) and `BLOCKCHAIN_RPC_URL` points to `http://127.0.0.1:8545`.
+
+**Run Server:**
+```bash
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+### 3. Frontend Setup
+The user interface for requesting rides and viewing demos.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+## 🧪 Running the Demo
+1. Open the Frontend.
+2. Submit a Ride Request.
+3. Watch the **Backend Terminal** for:
+   - Optimization logs (bundling rides).
+   - `[AUTO]` Bidding logs (automated agents bidding on the blockchain).
+   - `[AI]` Payment logs (settlement on-chain).
