@@ -52,13 +52,26 @@ class OptimizationInput(BaseModel):
                 "ride_requests": [
                     {
                         "user_id": "user_123",
-                        "location_start": {"lat": 28.6139, "lng": 77.2090},
-                        "location_end": {"lat": 28.5355, "lng": 77.3910},
-                        "ride_time": "2026-01-24T09:00:00",
-                        "buffer_time": 30
+                        "pickup": {
+                            "latitude": 29.8543,
+                            "longitude": 77.8880,
+                            "address": "IIT Roorkee"
+                        },
+                        "dropoff": {
+                            "latitude": 30.3165,
+                            "longitude": 78.0322,
+                            "address": "Clock Tower, Dehradun"
+                        },
+                        "time_window": {
+                            "earliest": "2026-01-27T09:00:00",
+                            "preferred": "2026-01-27T10:00:00",
+                            "latest": "2026-01-27T11:00:00"
+                        },
+                        "num_passengers": 1,
+                        "max_detour_minutes": 15
                     }
                 ],
-                "available_vehicles": ["driver_1", "driver_2"],
+                "available_vehicles": [],
                 "optimization_objective": "minimize_cost",
                 "max_computation_time_seconds": 30
             }

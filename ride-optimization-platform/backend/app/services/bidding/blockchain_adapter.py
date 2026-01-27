@@ -54,7 +54,7 @@ class BlockchainAdapter:
             'gasPrice': self.w3.eth.gas_price
         })
         signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.account.key)
-        tx_hash = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+        tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
         return self.w3.eth.wait_for_transaction_receipt(tx_hash)
 
     def start_commit(self, bundle_id: str) -> str:

@@ -37,7 +37,7 @@ export default function Home() {
       const requestPayload = {
         ride_requests: [
           {
-            user_id: "demo_user_001",
+            user_id: "user_123",
             pickup: {
               latitude: pickupCoords.lat,
               longitude: pickupCoords.lon,
@@ -72,6 +72,31 @@ export default function Home() {
         .then(data => {
           console.log("Optimization Result:", data);
           setApiResult(data);
+
+          // Find the bundle containing user_123
+          const targetBundle = data.bundles?.find((bundle: any) =>
+            bundle.users.some((user: any) => user.user_id === 'user_123')
+          );
+
+          if (targetBundle) {
+            console.log("Found bundle for user_123:", targetBundle.bundle_id);
+
+            // Start Bidding API call
+            fetch('http://127.0.0.1:8000/bidding/start', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bundle_id: targetBundle.bundle_id })
+            })
+              .then(bidRes => bidRes.json())
+              .then(bidData => {
+                console.log("Bidding Started:", bidData);
+              })
+              .catch(bidErr => {
+                console.error("Failed to start bidding:", bidErr);
+              });
+          } else {
+            console.warn("No bundle found containing user_123");
+          }
 
           // Wait 5 seconds for the "Matrix Animation"
           setTimeout(() => {

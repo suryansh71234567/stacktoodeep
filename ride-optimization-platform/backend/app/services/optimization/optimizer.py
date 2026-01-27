@@ -67,11 +67,11 @@ def generate_route_string(cluster: List[RideRequest], route) -> str:
     for stop in route.stops:
         user_id = "unknown"
         for ride in cluster:
-            if str(ride.id) == str(stop.ride_request_id):
+            if str(ride.id) == str(stop.ride_id):
                 user_id = ride.user_id or str(ride.id)[:8]
                 break
         
-        if stop.stop_type == StopType.PICKUP:
+        if stop.type == "pickup":
             route_parts.append(f"pickup_{user_id}")
         else:
             route_parts.append(f"drop_{user_id}")
@@ -92,13 +92,13 @@ def compute_user_times(cluster: List[RideRequest], route, cluster_start: datetim
         if i > 0:
             prev_stop = route.stops[i - 1]
             dist = haversine_distance_km(
-                prev_stop.lat, prev_stop.lng,
-                stop.lat, stop.lng
+                prev_stop.location.latitude, prev_stop.location.longitude,
+                stop.location.latitude, stop.location.longitude
             )
             travel_time_min = (dist / AVERAGE_SPEED_KMH) * 60
             current_time = current_time + timedelta(minutes=travel_time_min)
         
-        key = (str(stop.ride_request_id), stop.stop_type.value)
+        key = (str(stop.ride_id), stop.type)
         stop_times[key] = current_time
     
     for ride in cluster:

@@ -12,6 +12,7 @@
  */
 
 const hre = require("hardhat");
+const fs = require("fs");
 
 // Demo companies to be whitelisted as bidders
 // These are Hardhat's default test accounts #1-4
@@ -61,20 +62,36 @@ async function main() {
 
   // 3. Link PaymentExecutor to RideAuction
   console.log("\n--- Linking Contracts ---");
-  await paymentExecutor.setRideAuction(auctionAddress);
+  const linkTx = await paymentExecutor.setRideAuction(auctionAddress);
+  await linkTx.wait();
   console.log(`PaymentExecutor linked to RideAuction`);
 
   // 4. Whitelist all demo companies
   console.log("\n--- Whitelisting Companies as Bidders ---");
   for (const company of DEMO_COMPANIES) {
-    await rideAuction.addBidder(company.address);
-    console.log(`[OK] ${company.name}: ${company.address}`);
+    try {
+      const tx = await rideAuction.addBidder(company.address);
+      await tx.wait();
+      console.log(`[OK] ${company.name}: ${company.address}`);
+    } catch (e) {
+      console.log(`[SKIP] ${company.name} already whitelisted or error: ${e.message}`);
+    }
   }
 
   // 5. Authorize deployer as payment recorder (for AI agent simulation)
   console.log("\n--- Authorizing Payment Recorder ---");
-  await paymentExecutor.authorizeRecorder(deployer.address);
+  const authTx = await paymentExecutor.authorizeRecorder(deployer.address);
+  await authTx.wait();
   console.log(`[OK] Authorized: ${deployer.address}`);
+
+  // Save addresses to file
+  const addresses = {
+    RIDE_AUCTION_ADDRESS: auctionAddress,
+    PAYMENT_EXECUTOR_ADDRESS: paymentAddress,
+    deployedAt: new Date().toISOString()
+  };
+  fs.writeFileSync("deployed_addresses.json", JSON.stringify(addresses, null, 2));
+  console.log("Addresses saved to deployed_addresses.json");
 
   // Print summary
   console.log("\n" + "=".repeat(60));
@@ -88,9 +105,7 @@ async function main() {
   console.log("\n" + "=".repeat(60));
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

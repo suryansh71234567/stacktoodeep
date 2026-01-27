@@ -1,0 +1,24 @@
+# Hardhat
+artifacts/
+cache/
+typechain-types/
+coverage/
+coverage.json
+test-results.xml
+
+# Dependencies
+node_modules/
+
+# Environment Variables
+.env
+.env.backend
+.env.*
+
+# Foundry
+lib/
+out/
+cache/
+broadcast/
+
+# System
+.DS_Store
