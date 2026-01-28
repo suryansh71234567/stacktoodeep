@@ -98,6 +98,11 @@ Follow these steps to set up the project locally.
 - [ ] **Phase 4: Blockchain Escrow** (Smart contract for secure coupon redemption)
 
 ---
+contributors:
+Suyash Agrawal
+Suryansh Singh
+Lakshya Gupta
+Krit Jain
 
 ##  Contributing
 
@@ -110,7 +115,6 @@ We welcome contributions! Please follow these steps:
 
 ---
 
-* **Lakshya Gupta** - Frontend Engineering & UX
 
 ---
 
